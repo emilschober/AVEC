@@ -1,11 +1,6 @@
-Flask
+flask
 gunicorn
+pandas
 requests
 biopython
-torch
-time
-protein-sequence-annotation
-functools
-Bio.Seq
-pandas
-io
+openpyxl
