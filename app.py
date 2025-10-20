@@ -19,6 +19,15 @@ goflof_df: Optional[pd.DataFrame] = None
 splicevar_df: Optional[pd.DataFrame] = None
 n1c_variants_df: Optional[pd.DataFrame] = None 
 
+def load_templates():
+    with open('templates/base.html', 'w', encoding='utf-8') as f: f.write(base_html)
+    with open('templates/index.html', 'w', encoding='utf-8') as f: f.write(index_html)
+    with open('templates/about.html', 'w', encoding='utf-8') as f: f.write(about_html)
+    with open('templates/cite.html', 'w', encoding='utf-8') as f: f.write(cite_html)
+    with open('templates/api_docs.html', 'w', encoding='utf-8') as f: f.write(api_docs_html)
+
+load_templates()
+
 # --- Data Loading ---
 def load_databases():
     """
@@ -28,11 +37,11 @@ def load_databases():
     global clingen_df, goflof_df, splicevar_df, n1c_variants_df
     print("Loading databases...")
     try:
-        clingen_df = pd.read_csv("C:/Users/Emil Schober/OneDrive/Doktorarbeit/ASO treatment tool/Clingen-Curation-Activity-Summary-Report-2025-10-15.csv").set_index('gene_symbol')
-        goflof_df = pd.read_csv("C:/Users/Emil Schober/OneDrive/Doktorarbeit/ASO treatment tool/goflof_HGMD2019_v032021_allfeat.csv").set_index('GENE')
+        clingen_df = pd.read_csv"Clingen-Curation-Activity-Summary-Report-2025-10-15.csv").set_index('gene_symbol')
+        goflof_df = pd.read_csv("goflof_HGMD2019_v032021_allfeat.csv").set_index('GENE')
         
         # Load SpliceVarDB from Excel
-        splicevar_df = pd.read_excel("C:/Users/Emil Schober/OneDrive/Doktorarbeit/ASO treatment tool/splicevardb.xlsx")
+        splicevar_df = pd.read_excel("splicevardb.xlsx")
         
         # Sanitize SpliceVarDB data (critical for lookups)
         splicevar_df.columns = splicevar_df.columns.str.strip()
@@ -115,8 +124,6 @@ class EnsemblClient:
         return data if isinstance(data, dict) else None
     
 # --- Helper & Parsing Functions ---
-# --- Helper & Parsing Functions ---
-# ... (Place this function near your other helper functions) ...
 
 def _evaluate_splice_variant_position(variant_hgvs: str, vep_data: Dict[str, Any], details: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """
@@ -945,4 +952,5 @@ def batch_assess():
        
 if __name__ == '__main__':
     load_databases()
+
     app.run(debug=True)
