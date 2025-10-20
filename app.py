@@ -535,15 +535,21 @@ def load_databases():
     Loads all necessary data files and fetches N1C registry data
     into global pandas DataFrames.
     """
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    DATA_DIR = os.path.join(BASE_DIR, 'data')
+
+    clingen_path = os.path.join(DATA_DIR, 'Clingen-Curation-Activity-Summary-Report-2025-10-15.csv')
+    goflof_path = os.path.join(DATA_DIR, 'goflof_HGMD2019_v032021_allfeat.csv')
+    splicevar_path = os.path.join(DATA_DIR, 'splicevardb.xlsx')
+
     global clingen_df, goflof_df, splicevar_df, n1c_variants_df
     print("Loading databases...")
     try:
-        clingen_df = pd.read_csv("Clingen-Curation-Activity-Summary-Report-2025-10-15.csv").set_index('gene_symbol')
-        goflof_df = pd.read_csv("goflof_HGMD2019_v032021_allfeat.csv").set_index('GENE')
+        clingen_df = pd.read_csv(clingen_path).set_index('gene_symbol')
+        goflof_df = pd.read_csv(goflof_path).set_index('GENE')
         
         # Load SpliceVarDB from Excel
-        splicevar_df = pd.read_excel("splicevardb.xlsx")
-        
+        splicevar_df = pd.read_excel(splicevar_path)
         # Sanitize SpliceVarDB data (critical for lookups)
         splicevar_df.columns = splicevar_df.columns.str.strip()
         if 'hgvs' in splicevar_df.columns and 'gene' in splicevar_df.columns:
@@ -879,7 +885,7 @@ def assess_knockdown(gene_characteristics: Dict[str, Any]) -> Dict[str, Any]:
     haplo_status_text = haplo_obj.get("text", "Unknown")
     
     moi = gene_characteristics.get("moi", [])
-    is_ad_lof = any("Autosomal Dominant" in m for m in moi) and 'LoF' in gene_characteristics.get("moa", []) 
+    is_ad_lof = any("Autosomal Dominant" in m for m in moi) and gene_characteristics.get("moa", []) == 'LoF'
     
     checks = {"Gene is not haploinsufficient": haplo_status_text in ["No evidence", "Little evidence"]}
     
@@ -1320,6 +1326,8 @@ def process_single_variant(query: str, client: EnsemblClient, splice_user_input:
 # --- Main Flask Routes ---
 app = Flask(__name__)
 
+load_databases()
+
 @app.route('/')
 def index(): return render_template('index.html', title="Tool")
 @app.route('/about')
@@ -1452,8 +1460,3 @@ def batch_assess():
         download_name='avec_batch_results.xlsx',
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
-       
-if __name__ == '__main__':
-    load_databases()
-    app.run(debug=True)
-
