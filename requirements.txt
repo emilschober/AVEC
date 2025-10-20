@@ -1,0 +1,6 @@
+Flask
+gunicorn
+requests
+biopython
+torch
+protein-sequence-annotation
