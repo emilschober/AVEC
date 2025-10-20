@@ -538,11 +538,11 @@ def load_databases():
     global clingen_df, goflof_df, splicevar_df, n1c_variants_df
     print("Loading databases...")
     try:
-        clingen_df = pd.read_csv("C:/Users/Emil Schober/OneDrive/Doktorarbeit/ASO treatment tool/Clingen-Curation-Activity-Summary-Report-2025-10-15.csv").set_index('gene_symbol')
-        goflof_df = pd.read_csv("C:/Users/Emil Schober/OneDrive/Doktorarbeit/ASO treatment tool/goflof_HGMD2019_v032021_allfeat.csv").set_index('GENE')
+        clingen_df = pd.read_csv("Clingen-Curation-Activity-Summary-Report-2025-10-15.csv").set_index('gene_symbol')
+        goflof_df = pd.read_csv("goflof_HGMD2019_v032021_allfeat.csv").set_index('GENE')
         
         # Load SpliceVarDB from Excel
-        splicevar_df = pd.read_excel("C:/Users/Emil Schober/OneDrive/Doktorarbeit/ASO treatment tool/splicevardb.xlsx")
+        splicevar_df = pd.read_excel("splicevardb.xlsx")
         
         # Sanitize SpliceVarDB data (critical for lookups)
         splicevar_df.columns = splicevar_df.columns.str.strip()
@@ -879,7 +879,7 @@ def assess_knockdown(gene_characteristics: Dict[str, Any]) -> Dict[str, Any]:
     haplo_status_text = haplo_obj.get("text", "Unknown")
     
     moi = gene_characteristics.get("moi", [])
-    is_ad_lof = any("Autosomal Dominant" in m for m in moi) and gene_characteristics.get("moa", []) == 'LoF'
+    is_ad_lof = any("Autosomal Dominant" in m for m in moi) and 'LoF' in gene_characteristics.get("moa", []) 
     
     checks = {"Gene is not haploinsufficient": haplo_status_text in ["No evidence", "Little evidence"]}
     
@@ -1456,3 +1456,4 @@ def batch_assess():
 if __name__ == '__main__':
     load_databases()
     app.run(debug=True)
+
