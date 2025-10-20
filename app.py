@@ -9,6 +9,516 @@ from Bio.Seq import Seq
 import pandas as pd
 import io
 
+# --- Template Setup ---
+# This section will automatically create the necessary HTML files in a 'templates' folder.
+
+def setup_templates():
+    """Creates the templates directory and HTML files if they don't exist."""
+    if not os.path.exists('templates'):
+        os.makedirs('templates')
+
+    # Base template with navigation and footer
+    base_html = """
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ title }} - AVEC</title>
+    <script src="https://cdn.jsdelivr.net/npm/igv@2.15.5/dist/igv.min.js"></script>
+    <style>
+        body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;margin:0;background-color:#f8f9fa;color:#333}
+        .container{max-width:900px;margin:auto;background:white;padding:2em;border-radius:8px;box-shadow:0 4px 8px rgba(0,0,0,.1); margin-top: 2em; margin-bottom: 2em;}
+        h3,h4,h5{color:#005a9c} a{color:#005a9c; text-decoration: none;} a:hover{text-decoration: underline;}
+        nav {background-color: #333; padding: 1em; text-align: center;}
+        /* THIS IS THE ONLY CHANGE IN THIS BLOCK: Added API link */
+        nav a {color: white; margin: 0 15px; text-decoration: none; font-weight: bold;}
+        .disclaimer{font-size:.8em;color:#6c757d;margin-top:2em;text-align:center; padding-top: 1em; border-top: 1px solid #eee;}
+        form{display:grid;grid-template-columns:1fr;gap:1em;align-items:center;margin-bottom:2em}
+        input,button{padding:.75em;border-radius:4px;border:1px solid #ccc;font-size:1em;width:100%;box-sizing:border-box}
+        button{background-color:#007bff;color:white;font-weight:bold;cursor:pointer;border:none;width:auto;justify-self:end;padding:.75em 1.5em}
+        button:hover{background-color:#0056b3}
+        #loader{display:none;text-align:center;padding:1em;font-size:1.2em}
+        #results{display:none}.result-header{padding:1em;color:white;border-radius:4px 4px 0 0;margin-bottom:0;}.result-header h4{margin:0;font-size:1.5em;text-align:center;color:white;}
+        .result-block{border: 1px solid #ddd; border-top: none; padding: 1em; margin-bottom: 1.5em; border-radius: 0 0 4px 4px;}.result-block h5{margin-bottom:.5em;color:#495057;border-bottom:1px solid #eee;padding-bottom:.3em; margin-top: 0;}
+        .checklist{list-style-type:none;padding:0}.checklist li{margin-bottom:.5em}.pass::before{content:'✔';color:#28a745;margin-right:10px;font-weight:bold}.fail::before{content:'✖';color:#dc3545;margin-right:10px;font-weight:bold}
+        .eligible{background-color:#28a745}.likely-eligible{background-color:#17a2b8}.unlikely-eligible{background-color:#ffc107;color:#333 !important;}.not-eligible{background-color:#dc3545}.unable-to-assess{background-color:#6c757d}.error{background-color:#dc3545}.note{font-style:italic;color:#555;font-size:.9em}
+        .strategy-block {margin-bottom: 2em;}
+        .summary-block { background-color: #e9ecef; padding: 1em; border-radius: 4px; margin-bottom: 2em; }
+        #igv-container { border: 1px solid #ddd; margin-top: 2em; }
+        /* Style for code blocks in API docs */
+        pre { background-color: #f0f0f0; border: 1px solid #ddd; border-radius: 4px; padding: 1em; white-space: pre-wrap; word-wrap: break-word; font-family: 'Courier New', Courier, monospace; }
+    </style>
+</head>
+<body>
+    <nav> <a href="/">Tool</a> <a href="/about">About/Methods</a> <a href="/cite">How to Cite</a> <a href="/api_docs">API</a> </nav>
+    <main class="container">
+        {% block content %}{% endblock %}
+        <p class="disclaimer">This tool is for informational purposes only and is not for clinical use. Results require manual verification.</p>
+    </main>
+</body>
+</html>
+    """
+    index_html = """
+{% extends "base.html" %}
+{% block content %}
+<style>
+    .splice-prompt-buttons { 
+        margin-top: 1em; 
+        display: flex; 
+        gap: 10px; 
+    }
+    .splice-prompt-buttons button {
+        flex: 1;
+        color:white;
+        font-weight:bold;
+        cursor:pointer; 
+        border:none; 
+        width:auto;
+        padding:.75em 1.5em; 
+        border-radius: 4px; 
+        font-size: 0.9em;
+    }
+    .splice-prompt-buttons button.yes-btn { background-color: #28a745; }
+    .splice-prompt-buttons button.yes-btn:hover { background-color: #218838; }
+    .splice-prompt-buttons button.no-btn { background-color: #dc3545; }
+    .splice-prompt-buttons button.no-btn:hover { background-color: #c82333; }
+</style>
+
+<h3>AVEC: Automated Variant Eligibility Calculator</h3>
+<p>Enter a variant to assess its eligibility for ASO therapy.</p>
+<form id="assessment-form"> <label for="query">Variant:</label> <input id="query" required placeholder="e.g., NM_015427.4:c.1054G>A"> <button type="submit">Assess</button> </form>
+<div id="loader">Assessing...</div>
+<div id="results"></div>
+
+<hr style="margin: 2em 0;">
+
+<h4 id="batch-toggle" style="cursor: pointer; user-select: none;">
+    Batch Processing &#9662;
+</h4>
+
+<div id="batch-content" style="display: none;">
+    <p>Upload a .csv, .txt, or .xlsx file with one variant per line in the first column.</p>
+    <form id="batch-form">
+        <label for="batch-file">Batch File:</label>
+        <input type="file" id="batch-file" name="file" accept=".csv,.txt,.xlsx,.tsv" required>
+        <button type="submit">Process Batch</button>
+    </form>
+    <div id="batch-loader" style="display:none; text-align: center; padding: 1em;">
+        Processing file... This may take several minutes for large files.
+    </div>
+</div>
+
+<script>
+document.getElementById('assessment-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const resultsDiv = document.getElementById('results');
+    const loader = document.getElementById('loader');
+    resultsDiv.style.display = 'none';
+    resultsDiv.innerHTML = '';
+    loader.style.display = 'block';
+    
+    // Initial assessment payload contains only the query
+    const payload = { 
+        query: document.getElementById('query').value 
+        // splice_user_input is omitted, so backend defaults to DB check
+    }; 
+    
+    try {
+        const response = await fetch('/assess', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        const data = await response.json();
+        displayResults(data);
+    } catch (error) {
+        console.error("Fetch Error:", error);
+        displayResults({ classification: "Error", reason: "Could not connect to the server." });
+    } finally {
+        loader.style.display = 'none';
+    }
+});
+
+document.getElementById('batch-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const batchLoader = document.getElementById('batch-loader');
+    const fileInput = document.getElementById('batch-file');
+
+    if (fileInput.files.length === 0) {
+        alert("Please select a file to upload.");
+        return;
+    }
+
+    batchLoader.style.display = 'block';
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+
+    try {
+        const response = await fetch('/batch_assess', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (response.ok) {
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            const timestamp = new Date().toISOString().slice(0, 19).replace(/[-T:]/g, "");
+            a.download = `avec_batch_results_${timestamp}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            a.remove();
+        } else {
+            const errorData = await response.json();
+            alert(`Error processing file: ${errorData.error}`);
+        }
+    } catch (error) {
+        console.error("Batch fetch error:", error);
+        alert("A critical error occurred while communicating with the server.");
+    } finally {
+        batchLoader.style.display = 'none';
+        fileInput.value = '';
+    }
+});
+
+document.getElementById('batch-toggle').addEventListener('click', function() {
+    const content = document.getElementById('batch-content');
+    const toggle = this;
+
+    if (content.style.display === 'none') {
+        content.style.display = 'block';
+        toggle.innerHTML = 'Batch Processing &#9652;'; // Up arrow
+    } else {
+        content.style.display = 'none';
+        toggle.innerHTML = 'Batch Processing &#9662;'; // Down arrow
+    }
+});
+
+function renderIGV(containerId, data) {
+    const container = document.getElementById(containerId);
+    if (!container || !data || !data.locus) {
+        console.error("IGV container or data is missing, cannot render viewer.");
+        return;
+    }
+    
+    container.style.display = 'block';
+    container.innerHTML = '';
+    const options = { genome: "hg38", locus: data.locus };
+
+    igv.createBrowser(container, options)
+        .then(function (browser) {
+            const tracksToLoad = [];
+            if (data.variantTrack && data.variantTrack.features) {
+                tracksToLoad.push({ type: "annotation", name: data.variantTrack.name, features: data.variantTrack.features, color: "red", displayMode: "EXPANDED", height: 35 });
+            }
+            if (data.domainTrack && data.domainTrack.features) {
+                tracksToLoad.push({ type: "annotation", name: data.domainTrack.name, features: data.domainTrack.features, color: "#D46A6A", displayMode: "EXPANDED", height: 35 });
+            }
+            if (tracksToLoad.length > 0) browser.loadTrackList(tracksToLoad);
+        });
+}
+
+// --- NEW HELPER FUNCTION ---
+async function reassessWithSpliceInput(spliceInput) {
+    const resultsDiv = document.getElementById('results');
+    const loader = document.getElementById('loader');
+    resultsDiv.style.display = 'none';
+    resultsDiv.innerHTML = '';
+    loader.style.display = 'block';
+
+    // Create the payload with the new 'splice_user_input' flag
+    const payload = { 
+        query: document.getElementById('query').value,
+        splice_user_input: spliceInput // 'yes' or 'no'
+    };
+
+    try {
+        const response = await fetch('/assess', { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify(payload) 
+        });
+        const data = await response.json();
+        
+        // Add a note to the re-assessed data so the user knows what happened
+        if (data.assessments && data.assessments.Splice_Switching) {
+            const originalReason = data.assessments.Splice_Switching.reason || "";
+            let prefix = (spliceInput === 'yes') ? 
+                "<strong>Re-assessed based on user-provided 'Yes'.</strong>" : 
+                "<strong>Re-assessed based on user-provided 'No'.</strong>";
+            data.assessments.Splice_Switching.reason = `${prefix} ${originalReason}`;
+        }
+        
+        displayResults(data);
+    } catch (error) {
+        console.error("Fetch Error:", error);
+        displayResults({ classification: "Error", reason: "Could not connect to the server." });
+    } finally {
+        loader.style.display = 'none';
+    }
+}
+
+// --- NEW EVENT LISTENER (for 'results' div) ---
+document.getElementById('results').addEventListener('click', async function(e) {
+    // Check if the "Yes" button was clicked
+    if (e.target && e.target.id === 'splice-validation-yes') {
+        e.preventDefault();
+        reassessWithSpliceInput('yes');
+    }
+    
+    // Check if the "No" button was clicked
+    if (e.target && e.target.id === 'splice-validation-no') {
+        e.preventDefault();
+        reassessWithSpliceInput('no');
+    }
+});
+
+
+// --- MODIFIED displayResults FUNCTION (NOW CLEANED) ---
+function displayResults(data) {
+    const resultsDiv = document.getElementById('results');
+    resultsDiv.style.display = 'block';
+    resultsDiv.innerHTML = '';
+
+    if (!data || data.classification === "Error" || data.classification === "Unable to Assess") {
+        const classificationClass = (data.classification || "Error").toLowerCase().replace(/ /g, '-');
+        resultsDiv.innerHTML = `<div class="result-header ${classificationClass}"><h4>${data.classification || "Error"}</h4></div><div class="result-block"><p>${data.reason || "An unknown error occurred."}</p></div>`;
+        return;
+    }
+
+    let html = '';
+
+    if (data.summary) {
+        let geneHTML = data.summary.gene || 'N/A';
+        if (data.summary.gene_url) {
+            geneHTML = `<a href="${data.summary.gene_url}" target="_blank" rel="noopener noreferrer">${geneHTML}</a>`;
+        }
+        
+        let haploHTML = (data.summary.haploinsufficiency && data.summary.haploinsufficiency.text) || 'N/A';
+        if (data.summary.haploinsufficiency && data.summary.haploinsufficiency.url) {
+            haploHTML = `<a href="${data.summary.haploinsufficiency.url}" target="_blank" rel="noopener noreferrer">${haploHTML}</a>`;
+        }
+
+        html += `<div class="summary-block"><h4>Query Summary</h4><ul>
+                        <li><strong>Gene:</strong> ${geneHTML}</li>
+                        <li><strong>Transcript:</strong> ${data.summary.transcript_id || 'N/A'}</li>
+                        <li><strong>Mode of Inheritance:</strong> ${(data.summary.moi && data.summary.moi.join(', ')) || 'N/A'}</li>
+                        <li><strong>Haploinsufficiency:</strong> ${haploHTML}</li>
+                        <li><strong>Known Mechanism:</strong> ${(data.summary.moa && data.summary.moa.join(', ')) || 'N/A'}</li>
+                        </ul></div>`;
+    }
+
+    html += '<div id="igv-container" style="display:none;"></div>';
+    
+    if (data.assessments) {
+        html += '<h4>Therapeutic Assessments</h4>';
+        for (const [strategy, result] of Object.entries(data.assessments)) {
+            const strategyName = strategy.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+
+            // --- START: MODIFIED LOGIC FOR SPLICE_SWITCHING ---
+            if (strategy === 'Splice_Switching' && result.user_validation_prompt === true) {
+                // Render the special "Awaiting Validation" block with "Yes/No" buttons
+                html += `<div class="strategy-block">`;
+                html += `<div id="toggle-${strategy}" class="result-header unable-to-assess accordion-toggle" style="cursor: pointer; user-select: none;">
+                             <h4>${strategyName}: Awaiting Validation &#9662;</h4>
+                         </div>`;
+                // Set to 'block' so the user sees the question immediately
+                html += `<div id="content-${strategy}" class="result-block" style="display: block;">`; 
+                // The new question
+                html += `<p style="font-weight: bold;">Is there a known splice-altering effect validated with qPCR or Transcriptomics?</p>`;
+                // The new buttons
+                html += `<div class="splice-prompt-buttons">
+                             <button id="splice-validation-yes" type="button" class="yes-btn">Yes</button>
+                             <button id="splice-validation-no" type="button" class="no-btn">No</button>
+                         </div>`;
+                html += `</div></div>`;
+            
+            } else {
+                // This is the "else" block: it contains all the *original* rendering logic
+                const classificationClass = (result.classification || "Unable to Assess").toLowerCase().replace(/ /g, '-');
+                
+                html += `<div class="strategy-block">`;
+                html += `<div id="toggle-${strategy}" class="result-header ${classificationClass} accordion-toggle" style="cursor: pointer; user-select: none;">
+                             <h4>${strategyName}: ${result.classification || "N/A"} &#9662;</h4>
+                         </div>`;
+                // Set to 'none' by default
+                html += `<div id="content-${strategy}" class="result-block" style="display: none;">`;
+                
+                if (strategy === 'Exon_Skipping' && result.total_exon_number && result.gene_id && result.transcript_id) {
+                    const ensemblLink = `https://www.ensembl.org/Homo_sapiens/Transcript/Exons?db=core;g=${result.gene_id};t=${result.transcript_id}`;
+                    html += `<p><strong>Target:</strong> <a href="${ensemblLink}" target="_blank" rel="noopener noreferrer">Exon ${result.total_exon_number}</a></p>`;
+                }
+                if(result.reason) html += `<p><strong>Reason:</strong> ${result.reason}</p>`;
+                
+                if(result.details) {
+                    html += '<h5>Details</h5><ul>';
+                    for (const [key, value] of Object.entries(result.details)) {
+                        if (value && (value.startsWith('http') || value.startsWith('https'))) {
+                            html += `<li><strong>${key}:</strong> <a href="${value}" target="_blank" rel="noopener noreferrer">${value}</a></li>`;
+                        } else {
+                            html += `<li><strong>${key}:</strong> ${value}</li>`;
+                        }
+                    }
+                    html += '</ul>';
+                }
+
+                if (strategy === 'Exon_Skipping' && result.checks) {
+                    html += '<h5>Guideline Checks</h5><ul class="checklist">';
+                    for (const [check, passed] of Object.entries(result.checks)) {
+                        html += `<li class="${passed ? 'pass' : 'fail'}">${check}</li>`;
+                    }
+                    html += '</ul>';
+                }
+                
+                if (result.pathogenic_variant_counts) {
+                    let evidenceHeader = '<h5>Evidence from Databases</h5>';
+                    if (result.clinvar_url) {
+                        evidenceHeader = `<h5><a href="${result.clinvar_url}" target="_blank" rel="noopener noreferrer">Evidence from Databases (ClinVar)</a></h5>`;
+                    }
+                    html += evidenceHeader;
+
+                    let domainHTML = result.domain_count || 'N/A';
+                    if (result.domain_names && result.domain_names.length > 0) {
+                        domainHTML = result.domain_names.join(', ');
+                    }
+
+                    html += `<ul>
+                                <li><strong>Fraction of Protein:</strong> ${result.frac_cds || 'N/A'}</li>
+                                <li><strong>Overlapping Protein Domains:</strong> ${domainHTML}</li>
+                                <li><strong>Pathogenic Variants in Exon:</strong><ul>
+                                    <li>Missense: ${result.pathogenic_variant_counts.missense}</li>
+                                    <li>Nonsense: ${result.pathogenic_variant_counts.nonsense}</li>
+                                    <li>Frameshift: ${result.pathogenic_variant_counts.frameshift}</li>
+                                    <li>In-frame Deletions: ${result.pathogenic_variant_counts.inframe_del}</li>
+                                    <li>Splice Site: ${result.pathogenic_variant_counts.splice}</li>
+                                </ul></li>
+                            </ul>`;
+                }
+                html += `</div></div>`;
+            }
+            // --- END: MODIFIED LOGIC ---
+        }
+    }
+    
+    resultsDiv.innerHTML = html;
+
+    document.querySelectorAll('.accordion-toggle').forEach(toggle => {
+        toggle.addEventListener('click', function() {
+            const contentId = this.id.replace('toggle-', 'content-');
+            const content = document.getElementById(contentId);
+            const h4 = this.querySelector('h4');
+
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                h4.innerHTML = h4.innerHTML.replace('▼', '▲');
+            } else {
+                content.style.display = 'none';
+                h4.innerHTML = h4.innerHTML.replace('▲', '▼');
+            }
+        });
+    });
+
+    if (data.visualization) {
+        renderIGV('igv-container', data.visualization);
+    }
+}
+</script>
+{% endblock %}
+"""
+
+    about_html = """
+{% extends "base.html" %}
+{% block content %}
+<h3>About & Methods</h3>
+<h4>Purpose</h4>
+<p>AVEC (Automated Variant Eligibility Calculator) is a research tool designed to assess the eligibility of a variant for therapeutic antisense oligonucleotides (ASOs). It automates the analysis of key criteria to predict whether ASO therapy (splice-correcting, WT-upregulation, knockdown or exon skipping) is likely to restore a functional protein product, and assumes variants are nonsense, missense small indels or frameshift variants. For other variants please refer to the <a href="https://shorturl.at/YqphL" target="_blank" rel="noopener noreferrer"><b>guidelines</b></a></p>
+
+<h4>Methodology</h4>
+<p>This is a prototype</p>
+{% endblock %}
+"""
+
+    cite_html = """
+{% extends "base.html" %}
+{% block content %}
+<h3>prototype
+{% endblock %}
+"""
+    api_docs_html = """
+{% extends "base.html" %}
+{% block content %}
+<h3>AVEC API Documentation</h3>
+<p>
+    The AVEC API provides programmatic access to the variant assessment tool. 
+    You can retrieve the same detailed analysis available through the batch processing tool via a simple GET request.
+</p>
+
+<h4>Endpoint</h4>
+<p>The base URL for the API endpoint is:</p>
+<pre><code>https://skipme.onrender.com/api/v1/assess</code></pre>
+
+<h4>Request</h4>
+<p>The API accepts <strong>GET</strong> requests with a single required query parameter.</p>
+<ul>
+    <li><strong>Parameter:</strong> <code>query</code></li>
+    <li><strong>Description:</strong> The variant to assess in a recognized HGVS-like format.</li>
+    <li><strong>Examples:</strong> <code>NM_015427.4:c.1054G>A</code>, <code>FKTN c.1312G>A</code></li>
+</ul>
+
+<h4>Example Usage (cURL)</h4>
+<pre><code>curl -X GET "https://skipme.onrender.com/api/v1/assess?query=NM_000552.4:c.545G>A"</code></pre>
+
+<h4>Response</h4>
+<p>The API returns a JSON object containing the full assessment, structured identically to the data used by the web interface.</p>
+<ul>
+    <li>On success (HTTP 200), the response will contain `summary` and `assessments` objects.</li>
+    <li>On failure (e.g., invalid query or server error), it will return a JSON object with an `error` key.</li>
+</ul>
+
+<h5>Example Successful Response Snippet</h5>
+<pre><code>{
+  "assessments": {
+    "Exon_Skipping": {
+      "checks": {
+        "Benign splice variant found": false,
+        "Is <10% of Protein": true,
+        "Is In-Frame": true,
+        ...
+      },
+      "classification": "Likely Eligible",
+      "domain_count": 0,
+      "frac_cds": "3.55%",
+      "reason": "Exon meets the primary criteria for a skippable exon."
+    }
+  },
+  "summary": {
+    "gene": "DMD",
+    "haploinsufficiency": {
+      "text": "No evidence",
+      "url": "https://search.clinicalgenome.org/kb/genes/HGNC:2928"
+    },
+    "moa": [],
+    "moi": [ "X-linked" ],
+    "transcript_id": "ENST00000357033.9"
+  },
+  "visualization": { ... }
+}</code></pre>
+
+<h4>Fair Use</h4>
+<p>This is a free and open research tool. Please limit requests to a reasonable rate to ensure service availability for all users. For very large batch jobs, we recommend using the file upload feature on the main page.</p>
+
+{% endblock %}
+"""
+
+    # Write files with explicit UTF-8 encoding
+    with open('templates/base.html', 'w', encoding='utf-8') as f: f.write(base_html)
+    with open('templates/index.html', 'w', encoding='utf-8') as f: f.write(index_html)
+    with open('templates/about.html', 'w', encoding='utf-8') as f: f.write(about_html)
+    with open('templates/cite.html', 'w', encoding='utf-8') as f: f.write(cite_html)
+    with open('templates/api_docs.html', 'w', encoding='utf-8') as f: f.write(api_docs_html)
+# Run the setup function to ensure templates exist
+setup_templates()
+
 # ===== CONFIGURATION =====
 ENSEMBL_REST = "https://rest.ensembl.org"
 HEADERS = {"Content-Type": "application/json", "Accept": "application/json"}
@@ -19,15 +529,6 @@ goflof_df: Optional[pd.DataFrame] = None
 splicevar_df: Optional[pd.DataFrame] = None
 n1c_variants_df: Optional[pd.DataFrame] = None 
 
-def load_templates():
-    with open('templates/base.html', 'w', encoding='utf-8') as f: f.write(base_html)
-    with open('templates/index.html', 'w', encoding='utf-8') as f: f.write(index_html)
-    with open('templates/about.html', 'w', encoding='utf-8') as f: f.write(about_html)
-    with open('templates/cite.html', 'w', encoding='utf-8') as f: f.write(cite_html)
-    with open('templates/api_docs.html', 'w', encoding='utf-8') as f: f.write(api_docs_html)
-
-load_templates()
-
 # --- Data Loading ---
 def load_databases():
     """
@@ -37,11 +538,11 @@ def load_databases():
     global clingen_df, goflof_df, splicevar_df, n1c_variants_df
     print("Loading databases...")
     try:
-        clingen_df = pd.read_csv"Clingen-Curation-Activity-Summary-Report-2025-10-15.csv").set_index('gene_symbol')
-        goflof_df = pd.read_csv("goflof_HGMD2019_v032021_allfeat.csv").set_index('GENE')
+        clingen_df = pd.read_csv("C:/Users/Emil Schober/OneDrive/Doktorarbeit/ASO treatment tool/Clingen-Curation-Activity-Summary-Report-2025-10-15.csv").set_index('gene_symbol')
+        goflof_df = pd.read_csv("C:/Users/Emil Schober/OneDrive/Doktorarbeit/ASO treatment tool/goflof_HGMD2019_v032021_allfeat.csv").set_index('GENE')
         
         # Load SpliceVarDB from Excel
-        splicevar_df = pd.read_excel("splicevardb.xlsx")
+        splicevar_df = pd.read_excel("C:/Users/Emil Schober/OneDrive/Doktorarbeit/ASO treatment tool/splicevardb.xlsx")
         
         # Sanitize SpliceVarDB data (critical for lookups)
         splicevar_df.columns = splicevar_df.columns.str.strip()
@@ -124,6 +625,8 @@ class EnsemblClient:
         return data if isinstance(data, dict) else None
     
 # --- Helper & Parsing Functions ---
+# --- Helper & Parsing Functions ---
+# ... (Place this function near your other helper functions) ...
 
 def _evaluate_splice_variant_position(variant_hgvs: str, vep_data: Dict[str, Any], details: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """
@@ -952,5 +1455,4 @@ def batch_assess():
        
 if __name__ == '__main__':
     load_databases()
-
     app.run(debug=True)
