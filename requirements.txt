@@ -3,4 +3,9 @@ gunicorn
 requests
 biopython
 torch
+time
 protein-sequence-annotation
+functools
+Bio.Seq
+pandas
+io
