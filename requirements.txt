@@ -1,6 +1,0 @@
-flask
-gunicorn
-pandas
-requests
-biopython
-openpyxl
