@@ -1,4 +1,4 @@
-﻿import os
+import os
 from flask import Flask, request, jsonify, render_template, send_file
 import time
 import re
@@ -56,9 +56,15 @@ def setup_templates():
         .pubmed-card-footer { margin-top: .6em; text-align: right; }
         .pubmed-article-link { display:inline-block; padding: .35em .6em; border: 1px solid var(--border); border-radius: 6px; text-decoration: none; color: #0c63bd; background:#f8fafc }
         .pubmed-article-link:hover { background:#eef2f7 }
-        .pubmed-footer { margin-top: .75em; text-align: center; }
+        .pubmed-footer { margin-top: 1em; text-align: center; }
         .pubmed-footer a { text-decoration: none; padding:.4em .75em; border-radius:6px; border:1px solid var(--border); color:#0c63bd; background:#fff }
         .pubmed-footer a:hover { background:#f8fafc }
+        /* Domain list styling */
+        .domain-list { margin: .35em 0 0 0; padding-left: 1.1em; }
+        .domain-list li { margin: 0 0 .2em 0; }
+        /* PubMed accordion spacing */
+        .pubmed-accordion { margin-top: 1em; }
+        .pubmed-accordion .result-header, .pubmed-accordion .result-header h5 { color: #fff; }
 
         /* Beauty overrides and enhancements */
         :root{--primary:#0d6efd;--primary-dark:#0b5ed7;--text:#333;--muted:#6c757d;--bg:#f7f8fb;--card:#ffffff;--border:#e6e9ef;--ok:#28a745;--info:#17a2b8;--warn:#ffc107;--bad:#dc3545;--neutral:#6c757d}
@@ -488,7 +494,7 @@ function displayResults(data) {
         return;
     }
 
-    let html = '';\n\n    // Precompute MoA-related values for use across sections\n    const assessmentsObj = data.assessments || {};\n    const summaryObj = data.summary || {};\n    let moaList = summaryObj.moa || [];\n    let note = summaryObj.note || '';\n    let resolvedMoa = summaryObj.resolved_moa || window.userMoaInput || null;\n    if (!resolvedMoa) { const m = note.match(/user selection:\\s*(GoF|LoF)/i); if (m) resolvedMoa = m[1]; }\n    const hasN1C = !!(assessmentsObj && (assessmentsObj.N1C_Registry_Check || assessmentsObj.N1C_Assessed_Variants));
+    let html = '';\n\n    // Precompute MoA-related values for use across sections\n    const assessmentsObj = data.assessments || {};\n    const summaryObj = data.summary || {};\n    let moaList = summaryObj.moa || [];\n    let note = summaryObj.note || '';\n    let resolvedMoa = summaryObj.resolved_moa || window.userMoaInput || null;\n    if (!resolvedMoa) { const m = note.match(/user selection:\\s*(GoF|LoF)/i); if (m) resolvedMoa = m[1]; }\n    const hasN1C = !!(assessmentsObj && (assessmentsObj.N1C_Registry_Check || assessmentsObj.N1C_Assessed_Variants));\n    const hasExactN1CMatch = hasN1C;\n    const hasN1CKnockdown = !!(assessmentsObj && assessmentsObj.N1C_Gene_Knockdown);
 
     if (data.summary) {
         let geneHTML = data.summary.gene || 'N/A';
@@ -555,7 +561,7 @@ function displayResults(data) {
         }
 
         // Ensure MoA is shown when multiple or none are known (even if N1C links exist)
-        const showMoaBlock = (moaList.length === 0 || moaList.length > 1);
+        const showMoaBlock = (moaList.length === 0 || moaList.length > 1) && !hasExactN1CMatch;
         if (showMoaBlock && hasN1C) {
             if (resolvedMoa) {
                 const context = (moaList && moaList.length > 1) ? ` <span class=\"note\">(Known: ${moaList.join(', ')})</span>` : '';
@@ -568,7 +574,7 @@ function displayResults(data) {
             }
         }
         // Also show when no MoA is known and there is no N1C block
-        if (moaList.length === 0 && !resolvedMoa && !hasN1C) {
+        if (moaList.length === 0 && !resolvedMoa && !hasN1C && !hasExactN1CMatch) {
             html += `<div class=\"result-block\">\n                        <h5>Mechanism of Action</h5>\n                        <p>No established mechanism of action is known. Please select the appropriate mechanism below.</p>\n                    </div>`;
         }
     }
@@ -598,7 +604,7 @@ function displayResults(data) {
         html += '<h4>Therapeutic Assessments</h4>';
         html += '<div class="expand-controls"><button id="expand-all" class="secondary">Expand All</button><button id="collapse-all" class="secondary">Collapse All</button></div>';
         // MoA selection block inside Therapeutic Assessments when needed
-        if (!resolvedMoa && (moaList.length === 0 || moaList.length > 1)) {
+        if (!resolvedMoa && (moaList.length === 0 || moaList.length > 1) && !hasExactN1CMatch) {
             html += `<div class="strategy-block">`;
             html += `<div id="toggle-moa" class="result-header unable-to-assess accordion-toggle" style="cursor: pointer; user-select: none;">
                          <h4>Mechanism of Action: Selection Required <span class="chevron">&#9662;</span></h4>
@@ -625,11 +631,12 @@ function displayResults(data) {
                 const terms = '(gain-of-function OR GoF OR loss-of-function OR LoF OR "Gain of function" OR "Loss of function" OR "Mechanism of action")';
                 const moaQuery = prefix ? `${prefix} AND ${terms}` : terms;
                 const pmUrl = 'https://pubmed.ncbi.nlm.nih.gov/?term=' + encodeURIComponent(moaQuery);
-                html += `\n                    <div class=\"pubmed-supplement\">\n                        <p><strong>Related PubMed Search:</strong> ${moaQuery}</p>\n                        <div id=\"pubmed-moa-results\" data-query=\"${moaQuery}\">Loading PubMed results...</div>\n                        <div class=\"pubmed-footer\"><a href=\"${pmUrl}\" target=\"_blank\" rel=\"noopener noreferrer\">Open full results on PubMed</a></div>\n                        <p class=\"note\" style=\"margin-top:0.5em;\">Powered by NCBI E-utilities.</p>\n                    </div>`;
+                html += `\n                    <div class=\"strategy-block pubmed-accordion\">\n                        <div id=\"toggle-moa-pubmed\" class=\"result-header unable-to-assess accordion-toggle\" style=\"cursor: pointer; user-select: none;\">\n                            <h5>PubMed: Mechanism of Action <span class=\"chevron\">&#9662;</span></h5>\n                        </div>\n                        <div id=\"content-moa-pubmed\" class=\"result-block\" style=\"display: none;\">\n                            <p><strong>Related PubMed Search:</strong> ${moaQuery}</p>\n                            <div id=\"pubmed-moa-results\" class=\"pubmed-context\" data-query=\"${moaQuery}\">Loading PubMed results...</div>\n                            <div class=\"pubmed-footer\"><a href=\"${pmUrl}\" target=\"_blank\" rel=\"noopener noreferrer\">Open full results on PubMed</a></div>\n                            <p class=\"note\" style=\"margin-top:0.5em;\">Powered by NCBI E-utilities.</p>\n                        </div>\n                    </div>`;
             })();
             html += `</div></div>`;
         }
         for (const [strategy, result] of Object.entries(data.assessments)) {
+            if (hasN1CKnockdown && strategy === 'Allele_Specific_Knockdown') continue;
             const strategyName = strategy.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 
             // --- START: MODIFIED LOGIC FOR SPLICE_SWITCHING ---
@@ -660,10 +667,13 @@ function displayResults(data) {
                     if (gene && cdna) parts.push(`(${gene} AND ${cdna})`);
                     if (refseq) parts.push(refseq);
                     const prefix = parts.length ? `(${parts.join(' OR ')})` : '';
-                    const terms = '(Splicing OR Splice-altering OR \"intron retention\" OR \"splice-switch\" OR \"cryptic splice site activation\")';
-                    const spliceQuery = prefix ? `${prefix} AND ${terms}` : terms;
-                    const pmUrl = 'https://pubmed.ncbi.nlm.nih.gov/?term=' + encodeURIComponent(spliceQuery);
-                    html += `\n                    <div class=\"pubmed-supplement\">\n                        <p><strong>Related PubMed Search:</strong> ${spliceQuery}</p>\n                        <div id=\"pubmed-splice-results\" data-query=\"${spliceQuery}\">Loading PubMed results...</div>\n                        <div class=\"pubmed-footer\"><a href=\"${pmUrl}\" target=\"_blank\" rel=\"noopener noreferrer\">Open full results on PubMed</a></div>\n                        <p class=\"note\" style=\"margin-top:0.5em;\">Powered by NCBI E-utilities.</p>\n                    </div>`;
+                const terms = '(Splicing OR Splice-altering OR \"intron retention\" OR \"splice-switch\" OR \"cryptic splice site activation\")';
+                const spliceQuery = prefix ? `${prefix} AND ${terms}` : terms;
+                const pmUrl = 'https://pubmed.ncbi.nlm.nih.gov/?term=' + encodeURIComponent(spliceQuery);
+                const spliceToggleId = `toggle-${strategy}-pubmed-prompt`;
+                const spliceContentId = `content-${strategy}-pubmed-prompt`;
+                const spliceResultsId = `pubmed-${strategy}-results-prompt`;
+                html += `\n                    <div class=\"strategy-block pubmed-accordion\">\n                        <div id=\"${spliceToggleId}\" class=\"result-header unable-to-assess accordion-toggle\" style=\"cursor: pointer; user-select: none;\">\n                            <h5>PubMed: Splicing Evidence <span class=\"chevron\">&#9662;</span></h5>\n                        </div>\n                        <div id=\"${spliceContentId}\" class=\"result-block\" style=\"display: none;\">\n                            <p><strong>Related PubMed Search:</strong> ${spliceQuery}</p>\n                            <div id=\"${spliceResultsId}\" class=\"pubmed-context\" data-query=\"${spliceQuery}\">Loading PubMed results...</div>\n                            <div class=\"pubmed-footer\"><a href=\"${pmUrl}\" target=\"_blank\" rel=\"noopener noreferrer\">Open full results on PubMed</a></div>\n                            <p class=\"note\" style=\"margin-top:0.5em;\">Powered by NCBI E-utilities.</p>\n                        </div>\n                    </div>`;
                 })();
                 html += `</div></div>`;
             
@@ -696,7 +706,29 @@ function displayResults(data) {
                     html += '</ul>';
                 }
 
-                if (result.checks && strategy !== 'Allele_Specific_Knockdown') {
+                if (strategy === 'Splice_Switching') {
+                    (function(){
+                        const gene = (data.summary && data.summary.gene) ? data.summary.gene : '';
+                        const origQ = window.lastQuery || (document.getElementById('query') ? document.getElementById('query').value : '');
+                        const cdnaMatch = origQ ? origQ.match(/c\.[^\s\)\]]+/i) : null;
+                        const cdna = cdnaMatch ? cdnaMatch[0] : '';
+                        const refseqMatch = origQ ? origQ.match(/(NM_[0-9]+\.?[0-9]*)/i) : null;
+                        const refseq = refseqMatch ? refseqMatch[1] : '';
+                        const parts = [];
+                        if (gene && cdna) parts.push(`(${gene} AND ${cdna})`);
+                        if (refseq) parts.push(refseq);
+                        const prefix = parts.length ? `(${parts.join(' OR ')})` : '';
+                        const terms = '(Splicing OR Splice-altering OR \"intron retention\" OR \"splice-switch\" OR \"cryptic splice site activation\")';
+                        const spliceQuery = prefix ? `${prefix} AND ${terms}` : terms;
+                        const pmUrl = 'https://pubmed.ncbi.nlm.nih.gov/?term=' + encodeURIComponent(spliceQuery);
+                        const spliceToggleId = `toggle-${strategy}-pubmed`;
+                        const spliceContentId = `content-${strategy}-pubmed`;
+                        const spliceResultsId = `pubmed-${strategy}-results`;
+                        html += `\n                        <div class=\"strategy-block pubmed-accordion\">\n                            <div id=\"${spliceToggleId}\" class=\"result-header unable-to-assess accordion-toggle\" style=\"cursor: pointer; user-select: none;\">\n                                <h5>PubMed: Splicing Evidence <span class=\"chevron\">&#9662;</span></h5>\n                            </div>\n                            <div id=\"${spliceContentId}\" class=\"result-block\" style=\"display: none;\">\n                                <p><strong>Related PubMed Search:</strong> ${spliceQuery}</p>\n                                <div id=\"${spliceResultsId}\" class=\"pubmed-context\" data-query=\"${spliceQuery}\">Loading PubMed results...</div>\n                                <div class=\"pubmed-footer\"><a href=\"${pmUrl}\" target=\"_blank\" rel=\"noopener noreferrer\">Open full results on PubMed</a></div>\n                                <p class=\"note\" style=\"margin-top:0.5em;\">Powered by NCBI E-utilities.</p>\n                            </div>\n                        </div>`;
+                    })();
+                }
+
+                if (result.checks && strategy !== 'Allele_Specific_Knockdown' && strategy !== 'WT_Upregulation' && (result.classification || '').toLowerCase() !== 'eligible') {
                     const totalChecks = Object.keys(result.checks).length;
                     const passedChecks = Object.values(result.checks).filter(Boolean).length;
                     html += `<h5>Guideline Checks <span class="chip ${passedChecks===totalChecks ? 'chip-ok':'chip-warn'}">${passedChecks}/${totalChecks} passed</span></h5><ul class="checklist">`;
@@ -714,9 +746,31 @@ function displayResults(data) {
                     html += evidenceHeader;
 
                     let domainHTML = result.domain_count || 'N/A';
-                    if (result.domain_names && result.domain_names.length > 0) {
+                    if (Array.isArray(result.domain_details) && result.domain_details.length > 0) {
+                        const domainItems = result.domain_details.map(d => {
+                            const baseLabel = d.label || [d.name, d.source].filter(Boolean).join(' ') || 'Domain';
+                            const label = d.source && !baseLabel.includes(d.source) ? `${baseLabel} (${d.source})` : baseLabel;
+                            if (d.url) return `<li><a href="${d.url}" target="_blank" rel="noopener noreferrer">${label}</a></li>`;
+                            return `<li>${label}</li>`;
+                        }).join('');
+                        domainHTML = `<ul class="domain-list">${domainItems}</ul>`;
+                    } else if (result.domain_names && result.domain_names.length > 0) {
                         domainHTML = result.domain_names.join(', ');
                     }
+
+                    const spliceVariantLinks = result.splice_variant_links || {};
+                    const renderVariantLinks = (variants) => {
+                        if (!Array.isArray(variants) || variants.length === 0) return '';
+                        const items = variants.map(v => {
+                            const label = v.id || 'Variant';
+                            if (v.url) return `<a href="${v.url}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+                            return label;
+                        }).join(', ');
+                        return `<div class="note" style="margin: 0.15em 0 0 0.75em;">${items}</div>`;
+                    };
+                    const pathogenicSpliceLinks = renderVariantLinks(spliceVariantLinks.pathogenic);
+                    const benignSpliceLinks = renderVariantLinks(spliceVariantLinks.benign);
+                    const benignSpliceCount = result.pathogenic_variant_counts.benign_splice || 0;
 
                     html += `<ul>
                                 <li><strong>Fraction of Protein:</strong> ${result.frac_cds || 'N/A'}</li>
@@ -726,9 +780,32 @@ function displayResults(data) {
                                     <li>Nonsense: ${result.pathogenic_variant_counts.nonsense}</li>
                                     <li>Frameshift: ${result.pathogenic_variant_counts.frameshift}</li>
                                     <li>In-frame Deletions: ${result.pathogenic_variant_counts.inframe_del}</li>
-                                    <li>Splice Site: ${result.pathogenic_variant_counts.splice}</li>
+                                    <li>Splice Site: ${result.pathogenic_variant_counts.splice}${pathogenicSpliceLinks}</li>
+                                    <li>Benign Splice Site: ${benignSpliceCount}${benignSpliceLinks}</li>
                                 </ul></li>
                             </ul>`;
+                }
+
+                if (strategy === 'Allele_Specific_Knockdown') {
+                    (function(){
+                        const gene = (data.summary && data.summary.gene) ? data.summary.gene : '';
+                        const origQ = window.lastQuery || (document.getElementById('query') ? document.getElementById('query').value : '');
+                        const cdnaMatch = origQ ? origQ.match(/c\.[^\s\)\]]+/i) : null;
+                        const cdna = cdnaMatch ? cdnaMatch[0] : '';
+                        const refseqMatch = origQ ? origQ.match(/(NM_[0-9]+\.?[0-9]*)/i) : null;
+                        const refseq = refseqMatch ? refseqMatch[1] : '';
+                        const parts = [];
+                        if (gene && cdna) parts.push(`(${gene} AND ${cdna})`);
+                        if (refseq) parts.push(refseq);
+                        const prefix = parts.length ? `(${parts.join(' OR ')})` : '';
+                        const terms = '((antisense OR ASO) AND (knockdown OR \"gene silencing\" OR \"allele specific\" OR \"allele-specific\"))';
+                        const kdQuery = prefix ? `${prefix} AND ${terms}` : terms;
+                        const pmUrl = 'https://pubmed.ncbi.nlm.nih.gov/?term=' + encodeURIComponent(kdQuery);
+                        const kdToggleId = `toggle-${strategy}-pubmed`;
+                        const kdContentId = `content-${strategy}-pubmed`;
+                        const kdResultsId = `pubmed-${strategy}-results`;
+                        html += `\n                        <div class=\"strategy-block pubmed-accordion\">\n                            <div id=\"${kdToggleId}\" class=\"result-header unable-to-assess accordion-toggle\" style=\"cursor: pointer; user-select: none;\">\n                                <h5>PubMed: Knockdown Evidence <span class=\"chevron\">&#9662;</span></h5>\n                            </div>\n                            <div id=\"${kdContentId}\" class=\"result-block\" style=\"display: none;\">\n                                <p><strong>Related PubMed Search:</strong> ${kdQuery}</p>\n                                <div id=\"${kdResultsId}\" class=\"pubmed-context\" data-query=\"${kdQuery}\">Loading PubMed results...</div>\n                                <div class=\"pubmed-footer\"><a href=\"${pmUrl}\" target=\"_blank\" rel=\"noopener noreferrer\">Open full results on PubMed</a></div>\n                                <p class=\"note\" style=\"margin-top:0.5em;\">Powered by NCBI E-utilities.</p>\n                            </div>\n                        </div>`;
+                    })();
                 }
                 html += `</div></div>`;
             }
@@ -779,7 +856,7 @@ function displayResults(data) {
 
     // Render contextual PubMed results for MoA/Splice queries if present
     (async () => {
-        const targets = document.querySelectorAll('#pubmed-moa-results, #pubmed-splice-results');
+        const targets = document.querySelectorAll('.pubmed-context, #pubmed-moa-results');
         if (!targets || targets.length === 0) return;
         for (const container of targets) {
             const q = container.getAttribute('data-query');
@@ -1083,10 +1160,87 @@ class EnsemblClient:
     def get_domains(self, protein_id):
         all_features = self._get(f"/overlap/translation/{protein_id}", params={"feature": "protein_feature"})
         if not all_features or not isinstance(all_features, list): return []
-        domain_sources = {'CDD','Pfam','SMART','PROSITE profiles','PROSITE patterns','SUPERFAMILY','PRINTS','TIGRFAM','ProDom'}
-        preliminary_domains = [f for f in all_features if f.get('type') in domain_sources]
-        unique_interpro_domains = {f['interpro']: f for f in preliminary_domains if f.get('interpro')}
-        return list(unique_interpro_domains.values())
+        domain_sources = {src.lower() for src in (
+            'CDD','Pfam','SMART','PROSITE profiles','DisProt','PROSITE patterns','PRINTS','TIGRFAM','ProDom', 'mobidb-lite', 'RepeatsDB'
+        )}
+        repeat_disorder_sources = {
+            'mobidb-lite'
+        }
+        allowed_sources = domain_sources | repeat_disorder_sources
+        def _domain_url(feat: Dict[str, Any]) -> Optional[str]:
+            src = str(feat.get('type', '')).strip().lower()
+            identifier = str(feat.get('id') or feat.get('hit_id') or '').strip()
+            interpro_id = str(feat.get('interpro') or '').strip()
+            ident_upper, interpro_upper = identifier.upper(), interpro_id.upper()
+            if src == 'pfam' and identifier:
+                return f"https://www.ebi.ac.uk/interpro/entry/pfam/{ident_upper}/"
+            if src == 'smart' and identifier:
+                return f"https://www.ebi.ac.uk/interpro/entry/smart/{ident_upper}/"
+            if src.startswith('prosite') and identifier:
+                return f"https://prosite.expasy.org/{ident_upper}"
+            if src == 'prints' and identifier:
+                return f"https://www.ebi.ac.uk/interpro/entry/prints/{ident_upper}/"
+            if src == 'tigrfam' and identifier:
+                return f"https://www.ebi.ac.uk/interpro/entry/tigrfams/{ident_upper}/"
+            if src == 'cdd' and identifier:
+                return f"https://www.ncbi.nlm.nih.gov/Structure/cdd/cddsrv.cgi?uid={identifier}"
+            if src == 'superfamily' and identifier:
+                return f"https://www.ebi.ac.uk/interpro/entry/superfamily/{ident_upper}/"
+            if src == 'disprot' and identifier:
+                return f"https://disprot.org/{identifier}"
+            if interpro_upper.startswith('IPR'):
+                return f"https://www.ebi.ac.uk/interpro/entry/InterPro/{interpro_upper}/"
+            return None
+        def _display_name(feat: Dict[str, Any]) -> str:
+            desc = feat.get('description') or feat.get('id') or feat.get('hit_id') or 'Domain'
+            src = feat.get('type') or feat.get('source')
+            return f"{desc} ({src})" if src else str(desc)
+        def _is_domain_feature(feature):
+            ftype = str(feature.get('type', '')).strip()
+            desc = str(feature.get('description', '') or '').lower()
+            return (
+                ftype.lower() in allowed_sources
+                or any(k in desc for k in ('disorder','repeat','coiled-coil','coiled coil','low complexity'))
+            )
+        preliminary_domains = []
+        for f in all_features:
+            if not _is_domain_feature(f): continue
+            feat = dict(f)
+            feat['source'] = feat.get('type')
+            feat['url'] = _domain_url(feat)
+            feat['display_name'] = _display_name(feat)
+            preliminary_domains.append(feat)
+        unique_domains = {}
+        for feat in preliminary_domains:
+            src_norm = str(feat.get('source') or feat.get('type') or '').lower()
+            ftype_norm = str(feat.get('type') or '').lower()
+            desc_norm = str(feat.get('description') or '').lower()
+            id_norm = str(feat.get('id') or feat.get('hit_id') or '').lower()
+            logic_norm = str(feat.get('logic_name') or '').lower()
+            is_mobidb = any('mobidb' in val for val in (src_norm, ftype_norm, desc_norm, id_norm, logic_norm))
+            is_disorder_like = any('disorder' in val for val in (ftype_norm, desc_norm, logic_norm, id_norm))
+            is_mobidb_disorder = is_mobidb and is_disorder_like
+            if is_mobidb_disorder:
+                feat['source'] = 'MobiDBLite'
+                feat['display_name'] = 'MobiDBLite disorder prediction'
+                feat['id'] = feat.get('id') or feat.get('hit_id') or 'MobiDBLite'
+            key = None
+            if is_mobidb_disorder:
+                key = ('mobidb-lite', 'disorder_prediction')
+            else:
+                key = feat.get('interpro') or (feat.get('type'), feat.get('start'), feat.get('end'), feat.get('description') or feat.get('id'))
+            if is_mobidb_disorder and key in unique_domains:
+                existing = unique_domains[key]
+                merged = dict(existing)
+                merged['start'] = min(existing.get('start', float('inf')), feat.get('start', float('inf')))
+                merged['end'] = max(existing.get('end', float('-inf')), feat.get('end', float('-inf')))
+                merged['description'] = existing.get('description') or feat.get('description') or "MobiDBLite disorder prediction"
+                merged['display_name'] = existing.get('display_name') or "MobiDBLite disorder prediction"
+                merged['id'] = existing.get('id') or feat.get('id') or feat.get('hit_id')
+                unique_domains[key] = merged
+                continue
+            if key not in unique_domains: unique_domains[key] = feat
+        return list(unique_domains.values())
     def overlap_region_variation(self, chrom, start, end):
         data = self._get(f"/overlap/region/human/{chrom}:{start}-{end}", params={'feature': 'variation'})
         return data if isinstance(data, list) else []
@@ -1187,6 +1341,30 @@ def classify_variant_clinsig(clinsig_field):
     if any('uncertain' in v for v in vals): return 'VUS'
     if any('benign' in v for v in vals): return 'benign'
     return 'other'
+
+def _build_variant_link(variant: Dict[str, Any]) -> Optional[str]:
+    """
+    Builds a best-effort external link for a variant returned by Ensembl overlap endpoints.
+    Prefers ClinVar links when available, otherwise falls back to dbSNP or Ensembl Variation explorer.
+    """
+    variant_id = str(variant.get('id') or variant.get('variation_name') or '').strip()
+    if not variant_id:
+        return None
+
+    clinvar_id = variant.get('clinvar_variation_id') or variant.get('clinvar_id')
+    if clinvar_id:
+        cv_id = str(clinvar_id).strip()
+        if cv_id:
+            return f"https://www.ncbi.nlm.nih.gov/clinvar/variation/{cv_id}/"
+
+    source = str(variant.get('source') or '').lower()
+    if source == 'clinvar' and variant_id.isdigit():
+        return f"https://www.ncbi.nlm.nih.gov/clinvar/variation/{variant_id}/"
+
+    if variant_id.lower().startswith('rs'):
+        return f"https://www.ncbi.nlm.nih.gov/snp/{variant_id}"
+
+    return f"https://www.ensembl.org/Homo_sapiens/Variation/Explore?v={variant_id}"
 
 def choose_best_consequence(consequences: List[Dict[str, Any]], canonical_id: Optional[str] = None, gene_symbol_from_query: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """
@@ -1421,51 +1599,227 @@ def _extract_exon_numbers_from_text(text: str) -> List[int]:
             out.append(e)
     return out
 
-def n1c_exon_skipping_exon_numbers_for_gene(gene_symbol: str) -> Tuple[set, List[str]]:
+def _row_is_exon_skipping(row: pd.Series) -> bool:
+    """Checks if a registry row describes an exon-skipping approach."""
+    approach_cols = ['Approach', 'Therapeutic Modality', 'Therapeutic approach', 'Modality']
+    for col in approach_cols:
+        if col in row and isinstance(row.get(col), str):
+            if re.search(r"exon\s*skip", row.get(col), re.IGNORECASE):
+                return True
+    # Fallback: search any string field for exon skip
+    for col in row.index:
+        val = row[col]
+        if isinstance(val, str) and re.search(r"exon\s*skip", val, re.IGNORECASE):
+            return True
+    return False
+
+def _row_is_knockdown(row: pd.Series) -> bool:
+    """Checks if a registry row describes a knockdown approach."""
+    approach_cols = ['Approach', 'Therapeutic Modality', 'Therapeutic approach', 'Modality']
+    for col in approach_cols:
+        if col in row and isinstance(row.get(col), str):
+            if re.search(r"knock\s*down|silenc", row.get(col), re.IGNORECASE):
+                return True
+    for col in row.index:
+        val = row[col]
+        if isinstance(val, str) and re.search(r"knock\s*down|silenc", val, re.IGNORECASE):
+            return True
+    return False
+
+def n1c_exon_skipping_exon_numbers_for_gene(gene_symbol: str) -> Tuple[set, List[str], Dict[int, List[str]]]:
     """
-    Returns (set_of_exon_numbers, list_of_links) for N1C registry rows that indicate exon skipping
-    for the given gene. Best-effort extraction across free-text columns.
+    Returns (set_of_exon_numbers, list_of_links, map_exon_to_links) for N1C registry rows that
+    indicate exon skipping for the given gene. Filters to Approach: Exon Skipping when available.
     """
     exon_set: set = set()
-    links: List[str] = []
+    links: set = set()
+    exon_link_map: Dict[int, set] = {}
     if n1c_variants_df is None or n1c_variants_df.empty or not gene_symbol:
-        return exon_set, links
+        return exon_set, [], {}
     try:
-        gene_matches = n1c_variants_df[n1c_variants_df.get('Gene', '').str.upper() == gene_symbol.upper()]
+        if 'Gene' in n1c_variants_df.columns:
+            gene_matches = n1c_variants_df[n1c_variants_df['Gene'].astype(str).str.upper() == gene_symbol.upper()]
+        else:
+            gene_matches = n1c_variants_df
     except Exception:
-        # Fallback: if 'Gene' missing due to schema drift
         gene_matches = n1c_variants_df
     if gene_matches is None or len(gene_matches) == 0:
-        return exon_set, links
+        return exon_set, [], {}
 
-    # Iterate and look for exon skipping hints and extract exon numbers
+    candidate_cols = [
+        'Target Exon', 'Targeted Exon', 'Exon', 'Exons', 'Exon(s)', 'Exon(s) Targeted',
+        'Exon Target', 'Exon Targets', 'Intervention Description', 'Therapeutic Modality',
+        'Approach', 'Description', 'Notes', 'Summary', 'Treatment Details'
+    ]
+
     for _, row in gene_matches.iterrows():
-        row_texts = []
-        try:
-            for col in row.index:
-                val = row[col]
-                if isinstance(val, str):
-                    row_texts.append(val)
-        except Exception:
-            pass
+        if not _row_is_exon_skipping(row):
+            continue
 
-        joined = " | ".join(row_texts)
-        # Heuristic: must mention exon + skip to avoid false positives
-        if re.search(r"exon", joined, re.IGNORECASE) and re.search(r"skip", joined, re.IGNORECASE):
-            nums: List[int] = []
-            for t in row_texts:
-                nums.extend(_extract_exon_numbers_from_text(t))
-            for n in nums:
-                exon_set.add(n)
-            # Build link using ID if available
+        texts: List[str] = []
+        for col in candidate_cols:
+            if col in row and isinstance(row.get(col), str) and row.get(col).strip():
+                texts.append(row.get(col))
+
+        if not texts:
+            try:
+                texts = [val for val in row if isinstance(val, str)]
+            except Exception:
+                texts = []
+
+        nums: List[int] = []
+        for t in texts:
+            nums.extend(_extract_exon_numbers_from_text(t))
+        # Deduplicate in order
+        seen = set()
+        dedup_nums = []
+        for n in nums:
+            if n not in seen:
+                dedup_nums.append(n)
+                seen.add(n)
+
+        if not dedup_nums:
+            continue
+
+        link = None
+        try:
+            nid = row.get('ID')
+            if nid is not None and str(nid).strip() and str(nid).strip().lower() != 'nan':
+                link = f"https://generegistry.n1collaborative.org/entry.html?id={str(nid).strip()}"
+        except Exception:
+            link = None
+
+        for n in dedup_nums:
+            exon_set.add(n)
+            if link:
+                links.add(link)
+                exon_link_map.setdefault(n, set()).add(link)
+
+    # Normalize map values to lists
+    normalized_map: Dict[int, List[str]] = {k: sorted(v) for k, v in exon_link_map.items()}
+    return exon_set, sorted(links), normalized_map
+
+def n1c_exon_skipping_variant_exon_map(gene_symbol: str, all_exons: List[Dict[str, Any]], client: EnsemblClient) -> Dict[int, List[str]]:
+    """
+    Maps N1C registry exon-skipping variants (using RefSeq Transcript + c. change) to exon numbers,
+    using the same HGVS parsing as user input. Returns {exon_number: [links]}.
+    """
+    exon_map: Dict[int, List[str]] = {}
+    if n1c_variants_df is None or n1c_variants_df.empty or not gene_symbol or not all_exons:
+        return exon_map
+
+    try:
+        if 'Gene' in n1c_variants_df.columns:
+            gene_matches = n1c_variants_df[n1c_variants_df['Gene'].astype(str).str.upper() == gene_symbol.upper()]
+        else:
+            gene_matches = n1c_variants_df
+    except Exception:
+        gene_matches = n1c_variants_df
+
+    if gene_matches is None or len(gene_matches) == 0:
+        return exon_map
+
+    for _, row in gene_matches.iterrows():
+        if not _row_is_exon_skipping(row):
+            continue
+
+        refseq_val = None
+        cdot_val = None
+        for cand in ['RefSeq Transcript', 'Transcript', 'RefSeq', 'Transcript ID']:
+            if cand in row and isinstance(row.get(cand), str) and row.get(cand).strip():
+                refseq_val = row.get(cand).strip()
+                break
+        for cand in ['Coding DNA change (c.)', 'Variant (c.)', 'c_dot', 'c.']:
+            if cand in row and isinstance(row.get(cand), str) and row.get(cand).strip():
+                cdot_val = row.get(cand).strip()
+                break
+
+        if not refseq_val or not cdot_val:
+            continue
+
+        hgvs_input = f"{refseq_val}:{cdot_val}"
+        try:
+            hgvs_query, _ = parse_hgvs_query(hgvs_input)
+            if not hgvs_query:
+                continue
+            vep_data = client.vep_hgvs(hgvs_query)
+            if not vep_data or not isinstance(vep_data, list):
+                continue
+            vep_entry = vep_data[0]
+            v_chrom, v_start, v_end = vep_entry.get('seq_region_name'), vep_entry.get('start'), vep_entry.get('end')
+            if not all([v_chrom, v_start, v_end]):
+                continue
+            target_exon = next((ex for ex in all_exons if ex['seq_region_name'] == v_chrom and max(v_start, ex['start']) <= min(v_end, ex['end'])), None)
+            if not target_exon:
+                continue
+            exon_num = target_exon.get('total_exon_number')
+            if exon_num is None:
+                continue
+            link = None
             try:
                 nid = row.get('ID')
-                if isinstance(nid, (str, int)) and str(nid).strip() != '':
-                    links.append(f"https://generegistry.n1collaborative.org/entry.html?id={nid}")
+                if nid is not None and str(nid).strip() and str(nid).strip().lower() != 'nan':
+                    link = f"https://generegistry.n1collaborative.org/entry.html?id={str(nid).strip()}"
             except Exception:
-                pass
+                link = None
+            if link:
+                exon_map.setdefault(exon_num, []).append(link)
+            else:
+                exon_map.setdefault(exon_num, [])  # ensure key exists even without link
+        except Exception:
+            continue
 
-    return exon_set, links
+    # Deduplicate links for each exon
+    for ex_num, links in list(exon_map.items()):
+        dedup = []
+        seen = set()
+        for l in links:
+            if l not in seen:
+                seen.add(l)
+                dedup.append(l)
+        exon_map[ex_num] = dedup
+    return exon_map
+
+def n1c_gene_knockdown_entry(gene_symbol: str) -> Optional[Dict[str, Any]]:
+    """Returns a knockdown registry match at the gene level (Approach: Knockdown)."""
+    if n1c_variants_df is None or n1c_variants_df.empty or not gene_symbol:
+        return None
+    try:
+        if 'Gene' in n1c_variants_df.columns:
+            gene_matches = n1c_variants_df[n1c_variants_df['Gene'].astype(str).str.upper() == gene_symbol.upper()]
+        else:
+            gene_matches = n1c_variants_df
+    except Exception:
+        gene_matches = n1c_variants_df
+    if gene_matches is None or len(gene_matches) == 0:
+        return None
+    for _, row in gene_matches.iterrows():
+        if not _row_is_knockdown(row):
+            continue
+        link = None
+        try:
+            nid = row.get('ID')
+            if nid is not None and str(nid).strip() and str(nid).strip().lower() != 'nan':
+                link = f"https://generegistry.n1collaborative.org/entry.html?id={str(nid).strip()}"
+        except Exception:
+            link = None
+        modality = row.get('Therapeutic Modality') if isinstance(row.get('Therapeutic Modality'), str) else row.get('Approach')
+        reason = (
+            f"N1C registry lists knockdown project(s) for {gene_symbol}. "
+            f"Because the variant is Autosomal Dominant with GoF mechanism, it is considered eligible for knockdown."
+        )
+        details = {}
+        if modality:
+            details["Registry Modality"] = str(modality)
+        if link:
+            details["N1C Registry Link"] = link
+        return {
+            "classification": "Eligible",
+            "reason": reason,
+            "link": link,
+            "details": details
+        }
+    return None
 
 def get_gene_characteristics(gene_symbol: str) -> Dict[str, Any]:
     """
@@ -1537,19 +1891,24 @@ def assess_knockdown(gene_characteristics: Dict[str, Any]) -> Dict[str, Any]:
     # Determine if haploinsufficiency status is unknown/missing for warning purposes
     haplo_unknown = (haplo_status_text is None) or (str(haplo_status_text).strip().lower() in ["", "unknown", "n/a"])
     
-    if is_ad_lof or haplo_status_text == "Sufficient evidence":
+    if is_ad_lof or haplo_status_text == "Sufficient evidence" or haplo_status_text == "Little evidence":
         return {
-            "classification": "Not Eligible", # Changed to be more definitive
+            "classification": "Unlikely Eligible", 
             "reason": "Gene is associated with haploinsufficiency or Autosomal Dominant LoF, therefore knockdown could lead to unintended consequences.",
+            "checks": checks
+        }
+    
+    elif haplo_unknown:
+        reason = "Gene haploinsufficiency status is not available in datasources. Therefore knockdown could lead to unintended consequences and AVEC cannot determine amenability to knockdown."
+        return {
+            "classification": "Unable to Assess",
+            "reason": reason,
             "checks": checks
         }
     else:
         # Base reason
-        reason = "Gene is not known to be sensitive to haploinsufficiency."
-        
-        # If haploinsufficiency evidence is unknown/missing, append a warning
-        if haplo_unknown:
-            reason += " Warning: Haploinsufficiency status is unknown. Therefore knockdown could lead to unintended consequences."
+        reason = "Gene is assessed as insensitive to haploinsufficiency by ClinGen."
+
         return {
             "classification": "Likely Eligible",
             "reason": reason,
@@ -1570,7 +1929,7 @@ def assess_wt_upregulation(client: EnsemblClient, gene_id: str, gene_symbol: str
     if not gene_id or not gene_symbol:
         return {"classification": "Unable to Assess", "reason": "Missing Gene ID or Symbol."}
 
-    found_antisense_genes = {} # Use a dict to store unique NATs by their ID
+    found_antisense_genes = {} 
 
     # Collect curated gene-level features from N1C supplementary table
     supp_details: Dict[str, str] = {}
@@ -1633,8 +1992,9 @@ def assess_wt_upregulation(client: EnsemblClient, gene_id: str, gene_symbol: str
             nat_names = ", ".join([nat.get('external_name', nat['id']) for nat in nat_list])
             nat_ids = [nat['id'] for nat in nat_list]
 
-        # Start details with curated statuses
+        # Start details with curated statuses and cite the original guideline table
         details = dict(supp_details)
+        details["Datasource: TableS2 of N1C VARIANT Guidelines"] = "https://www.sciencedirect.com/science/article/pii/S0002929725000643#app2"
         # Add Ensembl NAT links if any were found
         if nat_list:
             for nat in nat_list:
@@ -1688,7 +2048,7 @@ def assess_splice_switching(variant_hgvs: str, vep_data: Dict[str, Any], gene_sy
 
     gene_rows = splicevar_df[splicevar_df['gene'].str.strip().str.contains(clean_gene, case=False, na=False)]
     if gene_rows.empty:
-        # Not found in SpliceVarDB for this gene � check SSCVDB fallback
+        # Not found in SpliceVarDB for this gene -> check SSCVDB fallback
         if sscvdb_df is not None and not sscvdb_df.empty and vep_data:
             variant_key = _format_sscvdb_variant_id_from_vep(vep_data)
             if variant_key and 'Variant ID' in sscvdb_df.columns:
@@ -1766,17 +2126,36 @@ def assess_single_exon(client, original_query, transcript, all_exons, target_exo
     clinvar_url = f"https://www.ncbi.nlm.nih.gov/clinvar/?term=GRCh38%3A{chrom}%3A{start}-{end}"
 
     counts = {'missense': 0, 'inframe_del': 0, 'splice': 0, 'nonsense': 0, 'frameshift': 0, 'benign_splice':0}
+    splice_variant_links = {"pathogenic": [], "benign": []}
+    seen_splice_variants = {"pathogenic": set(), "benign": set()}
     for v in variants_in_region:
         clclass = classify_variant_clinsig(v.get('clinical_significance'))
         conseq = (v.get("consequence_type") or "").lower()
+        variant_id = str(v.get('id') or v.get('variation_name') or '').strip()
+        variant_source = (v.get('source') or '').strip() or "Ensembl"
+        variant_link = _build_variant_link(v) if variant_id else None
         if clclass == "pathogenic":
             if "missense" in conseq: counts['missense'] += 1
             elif "inframe_deletion" in conseq: counts['inframe_del'] += 1
             elif "splice_donor" in conseq or "splice_acceptor" in conseq: counts['splice'] += 1
             elif "stop_gained" in conseq: counts['nonsense'] += 1
             elif "frameshift" in conseq: counts['frameshift'] += 1
+            if ("splice_donor" in conseq or "splice_acceptor" in conseq) and variant_id and variant_id not in seen_splice_variants["pathogenic"]:
+                splice_variant_links["pathogenic"].append({
+                    "id": variant_id,
+                    "source": variant_source,
+                    "url": variant_link
+                })
+                seen_splice_variants["pathogenic"].add(variant_id)
         elif clclass == 'benign' and ("splice_donor" in conseq or "splice_acceptor" in conseq):
             counts['benign_splice'] += 1
+            if variant_id and variant_id not in seen_splice_variants["benign"]:
+                splice_variant_links["benign"].append({
+                    "id": variant_id,
+                    "source": variant_source,
+                    "url": variant_link
+                })
+                seen_splice_variants["benign"].add(variant_id)
     
     exon_cds_len = target_exon['cds_length']
     coding_exon_number = target_exon['coding_exon_number']
@@ -1801,13 +2180,23 @@ def assess_single_exon(client, original_query, transcript, all_exons, target_exo
     cond4_small = (exon_cds_len / total_cds_len) < 0.1 if total_cds_len > 0 else False
     
     domains = client.get_domains(protein_id) if protein_id else []
-    overlapping_domain_names = []
+    overlapping_domain_names, overlapping_domain_details = [], []
     if domains:
         cds_pos_start = sum(e['cds_length'] for e in sorted(coding_exons, key=lambda x: x['coding_exon_number']) if e['coding_exon_number'] < coding_exon_number)
         exon_aa_start, exon_aa_end = (cds_pos_start // 3) + 1, ((cds_pos_start + exon_cds_len -1) // 3) + 1
         for d in domains:
             if d.get('start', 0) <= exon_aa_end and d.get('end', 0) >= exon_aa_start:
-                overlapping_domain_names.append(d.get('description', d.get('id', 'Unknown Domain')))
+                label = d.get('display_name') or d.get('description', d.get('id', 'Unknown Domain'))
+                overlapping_domain_names.append(label)
+                overlapping_domain_details.append({
+                    "label": label,
+                    "name": d.get('description') or d.get('id') or d.get('hit_id') or "Domain",
+                    "source": d.get('source') or d.get('type'),
+                    "id": d.get('id') or d.get('hit_id'),
+                    "url": d.get('url'),
+                    "start": d.get('start'),
+                    "end": d.get('end')
+                })
 
     domain_count = len(overlapping_domain_names)
     cond5_no_domain = domain_count == 0
@@ -1818,9 +2207,7 @@ def assess_single_exon(client, original_query, transcript, all_exons, target_exo
     
     # --- Step 3: Classification Logic Chain ---
     classification, reason = "Undetermined", ""
-    if cond9_benign_splice:
-        classification, reason = "Eligible", "Exon contains benign splice variants, suggesting it may be safely skipped."
-    elif not cond3_not_terminal:
+    if not cond3_not_terminal:
         classification, reason = "Not Eligible", "Exon is the first or last coding exon."
     elif not cond1_inframe:
         classification, reason = "Not Eligible", "Exon is out-of-frame, which would disrupt the reading frame."
@@ -1832,6 +2219,11 @@ def assess_single_exon(client, original_query, transcript, all_exons, target_exo
         classification, reason = "Not Eligible", f"Exon overlaps with {domain_count} protein domains and constitutes >10% of the coding region."
     elif not cond8_no_inframe_del:
         classification, reason = "Not Eligible", f"Exon contains {counts['inframe_del']} pathogenic in-frame deletion(s)."
+    elif cond9_benign_splice:
+        if counts['splice'] > 0 or counts['inframe_del'] > 0:
+            classification, reason = "Unlikely Eligible", "Exon has benign splice variants but also pathogenic splice or in-frame deletion variants, suggesting caution."
+        else:
+            classification, reason = "Eligible", "Exon contains benign splice variants, suggesting it may be safely skipped."
     elif not cond6_missense:
         classification, reason = "Unlikely Eligible", f"Exon is a mutational hotspot with {counts['missense']} pathogenic missense variants."
     elif not cond4_small:
@@ -1884,7 +2276,7 @@ def assess_single_exon(client, original_query, transcript, all_exons, target_exo
                             "chr": exon_map_entry['chr'], 
                             "start": feat_start - 1, 
                             "end": feat_end, 
-                            "name": domain.get('description', domain.get('id', 'Domain'))
+                            "name": domain.get('display_name', domain.get('description', domain.get('id', 'Domain')))
                         })
 
         padding = 1000
@@ -1905,6 +2297,8 @@ def assess_single_exon(client, original_query, transcript, all_exons, target_exo
         "pathogenic_variant_counts": counts, 
         "domain_count": domain_count,
         "domain_names": overlapping_domain_names,
+        "domain_details": overlapping_domain_details,
+        "splice_variant_links": splice_variant_links,
         "coding_exon_number": coding_exon_number,
         "total_exon_number": target_exon['total_exon_number'], 
         "gene_id": gene_id,
@@ -1994,11 +2388,20 @@ def process_single_variant(query: str, client: EnsemblClient, splice_user_input:
         if resolved_moa in ("GoF", "LoF"):
             moi = set(gene_characteristics.get("moi", []))
             if resolved_moa == "GoF":
-                # Show only Knockdown assessment
-                final_result["assessments"]["Allele_Specific_Knockdown"] = assess_knockdown(gene_characteristics)
+                is_ad = any("autosomal dominant" in str(m).lower() for m in moi)
+                n1c_gene_kd = None
+                if is_ad:
+                    n1c_gene_kd = n1c_gene_knockdown_entry(gene_symbol)
+                    if n1c_gene_kd:
+                        final_result["assessments"]["N1C_Gene_Knockdown"] = n1c_gene_kd
+                        # If registry knockdown exists, surface only this assessment
+                        return final_result
+                # Only run regular knockdown if no N1C gene-level knockdown entry
+                if not n1c_gene_kd:
+                    final_result["assessments"]["Allele_Specific_Knockdown"] = assess_knockdown(gene_characteristics)
             elif resolved_moa == "LoF":
-                # Show WT Upregulation only when LoF and Autosomal Dominant MOI
-                is_lof_ad = any("Autosomal Dominant" in m for m in moi)
+                # Show WT Upregulation only when LoF and Autosomal Dominant MOI (case-insensitive match)
+                is_lof_ad = any("autosomal dominant inheritance" in str(m).lower() for m in moi)
                 if is_lof_ad:
                     final_result["assessments"]["WT_Upregulation"] = assess_wt_upregulation(client, gene_id, gene_symbol)
 
@@ -2019,7 +2422,7 @@ def process_single_variant(query: str, client: EnsemblClient, splice_user_input:
                 details = {"Confirmation Method": "User-provided validation (qPCR/RNA-seq)"}
                 splice_assessment = _evaluate_splice_variant_position(variant_identifier_from_vep, vep_entry, details)
             elif splice_user_input == 'no':
-                splice_assessment = {"classification": "Not Eligible", "reason": "User confirmed no known splice-altering effect."}
+                splice_assessment = {"classification": "Unable to Assess", "reason": "User confirmed no known splice-altering effect."}
             else:
                 splice_assessment = assess_splice_switching(variant_identifier_from_vep, vep_entry, gene_symbol)
             
@@ -2041,18 +2444,35 @@ def process_single_variant(query: str, client: EnsemblClient, splice_user_input:
                         final_result["visualization"] = exon_skip_result.pop("visualization")
                     # N1C registry exon-skipping support: if N1C lists exon skipping for this exon, mark eligible
                     try:
-                        n1c_exons, n1c_links = n1c_exon_skipping_exon_numbers_for_gene(gene_symbol)
+                        n1c_exons, n1c_links, n1c_exon_link_map = n1c_exon_skipping_exon_numbers_for_gene(gene_symbol)
                     except Exception:
-                        n1c_exons, n1c_links = set(), []
-                    if target_exon.get('total_exon_number') in n1c_exons:
+                        n1c_exons, n1c_links, n1c_exon_link_map = set(), [], {}
+                    try:
+                        n1c_variant_exon_map = n1c_exon_skipping_variant_exon_map(gene_symbol, all_exons, client)
+                    except Exception:
+                        n1c_variant_exon_map = {}
+
+                    exon_num = target_exon.get('total_exon_number')
+                    matched_links: List[str] = []
+                    variant_links = n1c_variant_exon_map.get(exon_num, []) if exon_num is not None else []
+                    has_text_match = exon_num in n1c_exons if exon_num is not None else False
+                    if variant_links:
+                        matched_links.extend(variant_links)
+                    elif has_text_match:
+                        matched_links.extend(n1c_exon_link_map.get(exon_num, []))
+                        if not matched_links and n1c_links:
+                            matched_links.extend(n1c_links)
+
+                    if variant_links or has_text_match:
                         exon_skip_result = dict(exon_skip_result)
-                        exon_num = target_exon.get('total_exon_number')
-                        note = f"N1C registry lists exon skipping therapy targeting exon {exon_num} in {gene_symbol}. Variants in this exon are considered skippable."
+                        note = f"N1C registry contains a project that maps to exon {exon_num} in {gene_symbol}. The input variant lies in the same exon and is therefore considered skippable."
                         prev_reason = exon_skip_result.get('reason', '')
                         exon_skip_result['reason'] = (prev_reason + ' ' + note).strip()
                         exon_skip_result['classification'] = 'Eligible'
                         det = exon_skip_result.get('details', {}) if isinstance(exon_skip_result.get('details'), dict) else {}
-                        if n1c_links:
+                        if matched_links:
+                            det['N1C Exon Skipping (same exon)'] = ', '.join(sorted(set(matched_links)))
+                        elif n1c_links:
                             det['N1C Exon Skipping Entries'] = ', '.join(n1c_links)
                         det['Supported Exon'] = str(exon_num)
                         exon_skip_result['details'] = det
@@ -2210,7 +2630,16 @@ def batch_assess():
             else:
                 row["Ensembl Exon View Link"] = "N/A"
             domain_names = skip.get("domain_names") or []
-            row["Domains"] = ", ".join(domain_names) if domain_names else "N/A"
+            domain_details = skip.get("domain_details") or []
+            if domain_details:
+                formatted_domains = []
+                for d in domain_details:
+                    label = d.get("label") or d.get("name") or "Domain"
+                    url = d.get("url")
+                    formatted_domains.append(f"{label} [{url}]" if url else label)
+                row["Domains"] = "; ".join(formatted_domains)
+            else:
+                row["Domains"] = ", ".join(domain_names) if domain_names else "N/A"
 
         # Splice Correction
         splice = assessments.get("Splice_Switching", {})
@@ -2304,6 +2733,4 @@ def batch_assess():
         download_name='avec_batch_results.xlsx',
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
-
-
 
