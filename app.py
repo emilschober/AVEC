@@ -251,7 +251,7 @@ def setup_templates():
 
 <h3>AVEC: Automated Variant Eligibility Calculator</h3>
 <p>Enter a variant to assess its eligibility for ASO therapy.</p>
-<p class="warning">Results depend on underlying data sources and external services and may be incomplete or unavailable. This tool does not replace clinical judgement or a physician!</p>
+<p class="warning">Results depend on underlying data sources and  external services, and may be incomplete or unavailable. Any use of this tool warrants discussion with a biomedical specialist and clinical judgement by a trained physician.</p>
 <form id="assessment-form"> <label for="query">Variant:</label> <input id="query" required placeholder="e.g., NM_015427.4:c.1054G>A"> <button type="submit">Assess</button> </form>
 <div id="loader">Assessing...</div>
 <div id="results"></div>
@@ -4560,4 +4560,5 @@ def batch_assess():
         download_name='avec_batch_results.xlsx',
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
+
 
