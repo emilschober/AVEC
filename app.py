@@ -214,7 +214,7 @@ def setup_templates():
     </script>
     <main class="container">
         {% block content %}{% endblock %}
-        <p class="disclaimer">This tool is for informational purposes only and is not for clinical use. Results require manual verification.</p>
+        <p class="disclaimer">Disclaimer: This tool does not serve as Medical Advice. Although the content of these webpages may partly be provided by individuals in the medical profession, you acknowledge that provision of such content does not create a medical professional-patient relationship and does not constitute an opinion, medical advice, professional diagnosis, service  or treatment of any condition. The access to general information is provided for educational purposes only, through this site and links to other sites. The content is not recommended or endorsed by any doctor or healthcare provider. The information and content provided are not substitutes for medical or professional care, and the information is not to be used in place of a visit, call, consultation or the advice of  your physician or other healthcare  provider. You are liable or responsible for any advice, course of treatment, diagnosis or any other  information, services or product obtained through this site.</p>
     </main>
 </body>
 </html>
@@ -4560,3 +4560,4 @@ def batch_assess():
         download_name='avec_batch_results.xlsx',
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
+
