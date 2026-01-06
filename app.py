@@ -4560,5 +4560,22 @@ def batch_assess():
         download_name='avec_batch_results.xlsx',
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
+    
+@app.route('/download_batch_template')
+def download_batch_template():
+    """Serves the batch processing template file."""
+    try:
+        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+        DATA_DIR = os.path.join(BASE_DIR, 'data')
+        template_path = os.path.join(DATA_DIR, 'batch_template.xlsx')
+        return send_file(
+            template_path,
+            as_attachment=True,
+            download_name='AVEC_batch_template.xlsx',
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+    except FileNotFoundError:
+        return "Template file not found on server.", 404
+
 
 
