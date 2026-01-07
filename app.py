@@ -2381,7 +2381,7 @@ class EnsemblClient:
         return None
 
     def lookup_id_expand(self, identifier): return self._get(f"/lookup/id/{identifier}", params={'expand': '1'})
-    def vep_hgvs(self, hgvs_string): return self._get(f"/vep/human/hgvs/{hgvs_string.strip()}", params={'variant_class': 1})
+    def vep_hgvs(self, hgvs_string): return self._get(f"/vep/human/hgvs/{hgvs_string.strip()}/?hgvs=1", params={'variant_class': 1})
     def get_cds_sequence(self, transcript_id):
         data = self._get(f"/sequence/id/{transcript_id}", params={"type": "cds"})
         return data.get("seq") if isinstance(data, dict) else None
@@ -4576,6 +4576,7 @@ def download_batch_template():
         )
     except FileNotFoundError:
         return "Template file not found on server.", 404
+
 
 
 
