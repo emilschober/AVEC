@@ -4057,23 +4057,13 @@ def process_single_variant(query: str, client: EnsemblClient, splice_user_input:
         # Attempt 1: Check the chosen target_consequence directly
         if 'hgvsp' in target_consequence:
             protein_effect = target_consequence['hgvsp'].split(':')[-1]
-        
-        # Attempt 2: If missing, look at ALL consequences for this gene to find *any* valid HGVSp
-        # (This handles cases where 'choose_best_consequence' picked a transcript that lacks p. notation)
-        if not protein_effect:
-            for cons in all_consequences:
-                if cons.get('gene_symbol') == gene_symbol and 'hgvsp' in cons:
-                    protein_effect = cons['hgvsp'].split(':')[-1]
-                    break
-        
-        # Attempt 3: Construct from amino_acids/codons if HGVSp is still missing
-        if not protein_effect:
-            aa = target_consequence.get('amino_acids')
-            pos = target_consequence.get('protein_start')
-            if aa and pos:
-                protein_effect = f"p.({pos}{aa})"
-
-        # Attempt 4: Fallback to Consequence Type
+            
+        # Format HGVSp to include parentheses for predicted effect: ID:p.(Effect)
+        if protein_effect and ':p.' in protein_effect and ':p.(' not in protein_effect:
+            parts = protein_effect.split(':p.')
+            if len(parts) == 2:
+                protein_effect = f"{parts[0]}:p.({parts[1]})"
+        # Attempt 2: Fallback to Consequence Type
         if not protein_effect:
             terms = target_consequence.get('consequence_terms', [])
             if terms:
@@ -4576,6 +4566,7 @@ def download_batch_template():
         )
     except FileNotFoundError:
         return "Template file not found on server.", 404
+
 
 
 
