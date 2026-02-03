@@ -6,7 +6,7 @@ import requests
 from functools import lru_cache
 from decimal import Decimal, getcontext
 from typing import Dict, Any, Optional, Tuple, List
-from Bio.Seq import Seq
+from Bio.Seq import Seq 
 import pandas as pd
 import io
 
@@ -109,8 +109,9 @@ def setup_templates():
         .checklist li.fail{background:#fef2f2;border-color:#fecaca;color:#7f1d1d}
         .checklist li .ic{display:inline-block;width:1.25em;text-align:center;font-weight:700;margin-right:.4em}
         /* Override checklist for interactive mode */
-        .checklist.interactive li { cursor: pointer; user-select: none; transition: background-color 0.1s ease, border-color 0.1s ease; }
+        .checklist.interactive li { cursor: pointer; user-select: none; transition: background-color 0.1s ease, border-color 0.1s ease; position: relative; }
         .checklist.interactive li:hover { background-color: #e9ecef; }
+        .checklist.interactive li:hover::after { content: 'click for manual override'; position: absolute; right: 10px; font-size: 0.85em; color: var(--muted); font-style: italic; }
         body.dark .checklist.interactive li:hover { background-color: #1e293b; }
         .override-controls { text-align: center; }
 
@@ -173,13 +174,17 @@ def setup_templates():
         @keyframes spin{to{transform:rotate(360deg)}}
         /* Dark background override */
         body.dark{ background: linear-gradient(180deg,#0b1220 0%, #0a1020 100%); }
-        @media (max-width: 640px){ #assessment-form{grid-template-columns:1fr}}
+        @media (max-width: 640px){ 
+            #assessment-form{grid-template-columns:1fr}
+            .container{padding:1em; margin-top:1em}
+        }
     </style>
 </head>
 <body>
     <nav>
         <div class="links">
             <a href="/">Tool</a>
+            <a href="/usage">Usage</a>
             <a href="/about">About/Methods</a>
             <a href="/cite">How to Cite</a>
             <a href="/api_docs">API</a>
@@ -250,8 +255,8 @@ def setup_templates():
 </style>
 
 <h3>AVEC: Automated Variant Eligibility Calculator</h3>
-<p>Enter a variant to assess its eligibility for ASO therapy.</p>
-<p class="warning">Results depend on underlying data sources and  external services, and may be incomplete or unavailable. Any use of this tool warrants discussion with a biomedical specialist and clinical judgement by a trained physician.</p>
+<p>Enter a variant to assess its eligibility for ASO therapy. We strongly recommend to first <strong>search for already exisiting ASOs </strong>before using AVEC.</p>
+<p class="warning">Results depend on underlying data sources and external services and may be incomplete or unavailable. This tool does not replace clinical judgement or a physician!</p>
 <form id="assessment-form"> <label for="query">Variant:</label> <input id="query" required placeholder="e.g., NM_015427.4:c.1054G>A"> <button type="submit">Assess</button> </form>
 <div id="loader">Assessing...</div>
 <div id="results"></div>
@@ -263,7 +268,7 @@ def setup_templates():
 </h4>
 
 <div id="batch-content" style="display: none;">
-    <p>Upload a .csv, .txt, or .xlsx file with one variant per line in the first column.</p>
+    <p>Upload a .xlsx file with one variant per line in the first column.</p>
     <p><a href="/download_batch_template">Download Batch Template (.xlsx)</a></p>
     <form id="batch-form">
         <label for="batch-file">Batch File:</label>
@@ -277,7 +282,7 @@ def setup_templates():
 
 <script>
 // --- Session Management Helpers ---
-function saveSession(data, query, spliceInput, moaInput, commentary, esOverrides, kdOverrides, wtOverrides) {
+function saveSession(data, query, spliceInput, moaInput, commentary, esOverrides, kdOverrides, wtOverrides, moiOverride) {
     if (data) sessionStorage.setItem('avec_data', JSON.stringify(data));
     if (query) sessionStorage.setItem('avec_query', query);
     if (spliceInput !== undefined) sessionStorage.setItem('avec_splice', spliceInput || '');
@@ -286,6 +291,7 @@ function saveSession(data, query, spliceInput, moaInput, commentary, esOverrides
     if (esOverrides !== undefined) sessionStorage.setItem('avec_es_overrides', JSON.stringify(esOverrides));
     if (kdOverrides !== undefined) sessionStorage.setItem('avec_kd_overrides', JSON.stringify(kdOverrides));
     if (wtOverrides !== undefined) sessionStorage.setItem('avec_wt_overrides', JSON.stringify(wtOverrides));
+    if (moiOverride !== undefined) sessionStorage.setItem('avec_moi_override', JSON.stringify(moiOverride));
 }
 
 function clearSessionUserInputs() {
@@ -295,6 +301,7 @@ function clearSessionUserInputs() {
     sessionStorage.removeItem('avec_es_overrides');
     sessionStorage.removeItem('avec_kd_overrides');
     sessionStorage.removeItem('avec_wt_overrides');
+    sessionStorage.removeItem('avec_moi_override');
     sessionStorage.removeItem('avec_data'); // Clear old data on new submit
 }
 
@@ -308,6 +315,7 @@ window.addEventListener('DOMContentLoaded', () => {
     const savedEsOverrides = sessionStorage.getItem('avec_es_overrides');
     const savedKdOverrides = sessionStorage.getItem('avec_kd_overrides');
     const savedWtOverrides = sessionStorage.getItem('avec_wt_overrides');
+    const savedMoiOverride = sessionStorage.getItem('avec_moi_override');
 
     if (savedQuery) {
         document.getElementById('query').value = savedQuery;
@@ -320,6 +328,7 @@ window.addEventListener('DOMContentLoaded', () => {
     if (savedEsOverrides) window.userEsOverrides = JSON.parse(savedEsOverrides);
     if (savedKdOverrides) window.userKdOverrides = JSON.parse(savedKdOverrides);
     if (savedWtOverrides) window.userWtOverrides = JSON.parse(savedWtOverrides);
+    if (savedMoiOverride) window.userMoiOverride = JSON.parse(savedMoiOverride);
 
     if (savedData) {
         try {
@@ -334,7 +343,8 @@ window.addEventListener('DOMContentLoaded', () => {
 // Persist user selections across reassessments within the page lifecycle
 window.userSpliceInput = null; // 'yes' | 'no' | null
 window.userCommentary = '';
-window.userMoaInput = null;    // 'GoF' | 'LoF' | null
+window.userMoaInput = null;    // 'GoF' | 'LoF' | 'DN'
+window.userMoiOverride = null;
 window.userEsOverrides = {};   // For Exon Skipping
 window.userKdOverrides = {};   // For Knockdown
 window.userWtOverrides = {};   // For WT Upregulation
@@ -349,9 +359,10 @@ document.getElementById('assessment-form').addEventListener('submit', async func
     resultsDiv.innerHTML = '';
     loader.style.display = 'block';
     
-    // New query: reset stored user inputs and session storage for inputs
+    //query: reset stored user inputs and session storage for inputs
     window.userSpliceInput = null;
     window.userMoaInput = null;
+    window.userMoiOverride = null;
     window.userCommentary = '';
     window.userEsOverrides = {};
     window.userKdOverrides = {};
@@ -369,7 +380,7 @@ document.getElementById('assessment-form').addEventListener('submit', async func
         const data = await response.json();
         
         // Save to session
-        saveSession(data, queryVal, null, null, '', {}, {}, {});
+        saveSession(data, queryVal, null, null, '', {}, {}, {}, null);
         
         displayResults(data);
     } catch (error) {
@@ -471,7 +482,7 @@ async function reassessWithSpliceInput(spliceInput) {
     resultsDiv.innerHTML = '';
     loader.style.display = 'block';
 
-    // Create the payload with the new 'splice_user_input' flag
+    // Create the payload with the 'splice_user_input' flag
     const payload = { 
         query: queryVal,
         splice_user_input: spliceInput, // 'yes' or 'no'
@@ -501,7 +512,8 @@ async function reassessWithSpliceInput(spliceInput) {
         // Save session state
         saveSession(data, queryVal, spliceInput, window.userMoaInput, 
             document.getElementById('user-commentary')?.value,
-            window.userEsOverrides, window.userKdOverrides, window.userWtOverrides
+            window.userEsOverrides, window.userKdOverrides, window.userWtOverrides,
+            window.userMoiOverride
         );
 
         displayResults(data);
@@ -513,7 +525,7 @@ async function reassessWithSpliceInput(spliceInput) {
     }
 }
 
-// --- NEW HELPER FUNCTION FOR MoA SELECTION ---
+// --- HELPER FUNCTION FOR MoA SELECTION ---
 async function reassessWithMoaInput(moaChoice) {
     const resultsDiv = document.getElementById('results');
     const loader = document.getElementById('loader');
@@ -529,7 +541,8 @@ async function reassessWithMoaInput(moaChoice) {
         splice_user_input: window.userSpliceInput,
         exon_skipping_overrides: window.userEsOverrides,
         knockdown_overrides: window.userKdOverrides,
-        wt_upregulation_overrides: window.userWtOverrides
+        wt_upregulation_overrides: window.userWtOverrides,
+        gene_characteristics_overrides: window.userMoiOverride
     };
 
     try {
@@ -554,7 +567,8 @@ async function reassessWithMoaInput(moaChoice) {
         // Save session state
         saveSession(data, queryVal, window.userSpliceInput, moaChoice, 
             document.getElementById('user-commentary')?.value,
-            window.userEsOverrides, window.userKdOverrides, window.userWtOverrides
+            window.userEsOverrides, window.userKdOverrides, window.userWtOverrides,
+            window.userMoiOverride
         );
 
         displayResults(data);
@@ -566,7 +580,63 @@ async function reassessWithMoaInput(moaChoice) {
     }
 }
 
-// --- NEW HELPER FUNCTION FOR GUIDELINE OVERRIDES ---
+// --- HELPER FUNCTION FOR MOI OVERRIDE ---
+async function reassessWithMoiOverride(moiChoice) {
+    const resultsDiv = document.getElementById('results');
+    const loader = document.getElementById('loader');
+    const queryVal = document.getElementById('query').value;
+    
+    resultsDiv.style.display = 'none';
+    resultsDiv.innerHTML = '';
+    loader.style.display = 'block';
+
+    // The backend expects a list of full strings
+    const moiMap = {
+        'AD': ['Autosomal dominant inheritance'],
+        'AR': ['Autosomal recessive inheritance'],
+        'XD': ['X-linked dominant inheritance'],
+        'XR': ['X-linked recessive inheritance']
+    };
+    const moiPayload = moiMap[moiChoice] || [];
+
+    // Update global state
+    window.userMoiOverride = { moi: moiPayload };
+
+    const payload = {
+        query: queryVal,
+        moa_user_input: window.userMoaInput,
+        splice_user_input: window.userSpliceInput,
+        exon_skipping_overrides: window.userEsOverrides,
+        knockdown_overrides: window.userKdOverrides,
+        wt_upregulation_overrides: window.userWtOverrides,
+        gene_characteristics_overrides: window.userMoiOverride
+    };
+
+    try {
+        const response = await fetch('/assess', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await response.json();
+        
+        // Add a note to the summary
+        if (data.summary) {
+            if (!data.summary.note) data.summary.note = '';
+            data.summary.note = (data.summary.note ? data.summary.note + ' ' : '') +
+                `MOI overridden by user to: ${moiChoice}.`;
+        }
+
+        saveSession(data, queryVal, window.userSpliceInput, window.userMoaInput, window.userCommentary, window.userEsOverrides, window.userKdOverrides, window.userWtOverrides, window.userMoiOverride);
+        displayResults(data);
+    } catch (error) {
+        console.error('Fetch Error:', error);
+    } finally {
+        loader.style.display = 'none';
+    }
+}
+
+// --- HELPER FUNCTION FOR GUIDELINE OVERRIDES ---
 async function reassessWithGuidelineOverrides(strategy, overrides) {
     const resultsDiv = document.getElementById('results');
     const loader = document.getElementById('loader');
@@ -587,13 +657,14 @@ async function reassessWithGuidelineOverrides(strategy, overrides) {
         splice_user_input: window.userSpliceInput,
         exon_skipping_overrides: window.userEsOverrides,
         knockdown_overrides: window.userKdOverrides,
-        wt_upregulation_overrides: window.userWtOverrides
+        wt_upregulation_overrides: window.userWtOverrides,
+        gene_characteristics_overrides: window.userMoiOverride
     };
 
     try {
         const response = await fetch('/assess', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         const data = await response.json();
-        saveSession(data, queryVal, window.userSpliceInput, window.userMoaInput, window.userCommentary, window.userEsOverrides, window.userKdOverrides, window.userWtOverrides);
+        saveSession(data, queryVal, window.userSpliceInput, window.userMoaInput, window.userCommentary, window.userEsOverrides, window.userKdOverrides, window.userWtOverrides, window.userMoiOverride);
         displayResults(data);
     } catch (error) {
         console.error('Fetch Error:', error);
@@ -620,7 +691,8 @@ async function reassessWithExonicPathogenicityInput(pathogenicityChoice) {
         moa_user_input: window.userMoaInput,
         exon_skipping_overrides: window.userEsOverrides,
         knockdown_overrides: window.userKdOverrides,
-        wt_upregulation_overrides: window.userWtOverrides
+        wt_upregulation_overrides: window.userWtOverrides,
+        gene_characteristics_overrides: window.userMoiOverride
     };
 
     try {
@@ -635,7 +707,7 @@ async function reassessWithExonicPathogenicityInput(pathogenicityChoice) {
         window.userExonicPathogenicityInput = pathogenicityChoice;
 
         // Save session and display
-        saveSession(data, queryVal, window.userSpliceInput, window.userMoaInput, window.userCommentary, window.userEsOverrides, window.userKdOverrides, window.userWtOverrides);
+        saveSession(data, queryVal, window.userSpliceInput, window.userMoaInput, window.userCommentary, window.userEsOverrides, window.userKdOverrides, window.userWtOverrides, window.userMoiOverride);
         displayResults(data);
     } catch (error) {
         console.error('Fetch Error:', error);
@@ -671,7 +743,24 @@ document.getElementById('results').addEventListener('click', async function(e) {
         e.preventDefault();
         reassessWithMoaInput('DN');
     }
-    // --- NEW: Exonic Pathogenicity Buttons ---
+    // ---  MOI Override Buttons ---
+    if (e.target && e.target.id === 'moi-choice-ad') {
+        e.preventDefault();
+        reassessWithMoiOverride('AD');
+    }
+    if (e.target && e.target.id === 'moi-choice-ar') {
+        e.preventDefault();
+        reassessWithMoiOverride('AR');
+    }
+    if (e.target && e.target.id === 'moi-choice-xd') {
+        e.preventDefault();
+        reassessWithMoiOverride('XD');
+    }
+    if (e.target && e.target.id === 'moi-choice-xr') {
+        e.preventDefault();
+        reassessWithMoiOverride('XR');
+    }
+    // ---  Exonic Pathogenicity Buttons ---
     if (e.target && e.target.id === 'exonic-pathogenicity-yes') {
         e.preventDefault();
         reassessWithExonicPathogenicityInput('yes');
@@ -701,7 +790,7 @@ document.getElementById('results').addEventListener('click', async function(e) {
 
         reassessWithGuidelineOverrides(strategy, overrides);
     }
-    // --- NEW: Interactive Guideline Checklist Item ---
+    // --- Interactive Guideline Checklist Item ---
     if (e.target && e.target.closest('.checklist.interactive li')) {
         e.preventDefault();
         const li = e.target.closest('li');
@@ -786,7 +875,7 @@ function displayResults(data) {
         html += `<div class="summary-block"><h4>Query Summary</h4><ul>
                                 <li><strong>Gene:</strong> ${geneHTML}</li>
                                 <li><strong>Transcript:</strong> ${transcriptHTML}</li>
-                                <li><strong>Protein Effect:</strong> ${proteinEffectHTML}</li>
+                                <li><strong>Protein consequence:</strong> ${proteinEffectHTML}</li>
                                 <li><strong>Mode of Inheritance:</strong> ${moiHTML}</li>
                                 <li><strong>ClinGen Haploinsufficiency:</strong> ${haploHTML}</li>
                                 <li><strong>ClinGen Triplosensitivity (ClinGen):</strong> ${triploHTML}</li>
@@ -833,10 +922,6 @@ function displayResults(data) {
                 html += `<div class=\"result-block\">\n                            <h5>Mechanism of Action</h5>\n                            <p>${body} Please select the appropriate mechanism below.</p>\n                        </div>`;
             }
         }
-        // Also show when no MoA is known and there is no N1C block
-        if (moaList.length === 0 && !resolvedMoa && !hasN1C && !hasExactN1CMatch) {
-            html += `<div class=\"result-block\">\n                        <h5>Mechanism of Action</h5>\n                        <p>No established mechanism of action is known. Please select the appropriate mechanism below.</p>\n                    </div>`;
-        }
     }
     
     // Literature accordion (PubMed and Google Scholar) above assessments
@@ -863,18 +948,48 @@ function displayResults(data) {
     if (data.assessments) {
         html += '<h4>Therapeutic Assessments</h4>';
         html += '<div class="expand-controls"><button id="expand-all" class="secondary">Expand All</button><button id="collapse-all" class="secondary">Collapse All</button></div>';
-        // MoA selection block inside Therapeutic Assessments when needed
-        if (!resolvedMoa && !hasExactN1CMatch) {
+        
+        // --- MOI Override Block ---
+        let currentMoi = null;
+        if (window.userMoiOverride && window.userMoiOverride.moi && window.userMoiOverride.moi.length > 0) {
+            const m = window.userMoiOverride.moi[0];
+            if (m.includes('Autosomal dominant')) currentMoi = 'AD';
+            else if (m.includes('Autosomal recessive')) currentMoi = 'AR';
+            else if (m.includes('X-linked dominant')) currentMoi = 'XD';
+            else if (m.includes('X-linked recessive')) currentMoi = 'XR';
+        }
+        const getMoiBtnClass = (moi) => (currentMoi === moi ? 'yes-btn' : 'neutral-btn');
+
+        html += `<div class="strategy-block">
+            <div id="toggle-moi-override" class="result-header unable-to-assess accordion-toggle" style="cursor: pointer; user-select: none;">
+                <h4>Mode of Inheritance<span class="chevron">&#9662;</span></h4>
+            </div>
+            <div id="content-moi-override" class="result-block" style="display: none;">
+                <p style="font-weight: bold;">If the ClinGen Mode of Inheritance is incorrect or missing, you can manually select one here to reassess eligibility.</p>
+                <div class="splice-prompt-buttons">
+                    <button id="moi-choice-ad" type="button" class="${getMoiBtnClass('AD')}">AD</button>
+                    <button id="moi-choice-ar" type="button" class="${getMoiBtnClass('AR')}">AR</button>
+                    <button id="moi-choice-xd" type="button" class="${getMoiBtnClass('XD')}">XD</button>
+                    <button id="moi-choice-xr" type="button" class="${getMoiBtnClass('XR')}">XR</button>
+                </div>
+            </div>
+        </div>`;
+
+        // MoA selection block inside Therapeutic Assessments
+        if (!hasExactN1CMatch) {
+            const currentMoa = resolvedMoa; // 'GoF', 'LoF', 'DN' or null
+            const getMoaBtnClass = (m) => (currentMoa === m ? 'yes-btn' : 'neutral-btn');
+
             html += `<div class="strategy-block">`;
             html += `<div id="toggle-moa" class="result-header unable-to-assess accordion-toggle" style="cursor: pointer; user-select: none;">
-                          <h4>Mechanism of Action: Selection Required <span class="chevron">&#9662;</span></h4>
+                          <h4>Mechanism of Action ${currentMoa ? ': ' + currentMoa : ''} <span class="chevron">&#9662;</span></h4>
                       </div>`;
             html += `<div id="content-moa" class="result-block" style="display: block;">
-                        <p style="font-weight: bold;">There is no single known mechanism of action available. Please select the mechanism relevant to your variant:</p>
+                        <p style="font-weight: bold;">Please select the mechanism relevant to your variant to assess for mechanism-specific strategies (Knockdown, WT Upregulation):</p>
                         <div class="splice-prompt-buttons">
-                            <button id="moa-choice-gof" type="button" class="neutral-btn">GoF</button>
-                            <button id="moa-choice-lof" type="button" class="neutral-btn">LoF</button>
-                            <button id="moa-choice-dn" type="button" class="neutral-btn">DN</button>
+                            <button id="moa-choice-gof" type="button" class="${getMoaBtnClass('GoF')}">GoF</button>
+                            <button id="moa-choice-lof" type="button" class="${getMoaBtnClass('LoF')}">LoF</button>
+                            <button id="moa-choice-dn" type="button" class="${getMoaBtnClass('DN')}">DN</button>
                         </div>
                     `;
             // Insert contextual PubMed search for MoA right below the buttons
@@ -910,7 +1025,7 @@ function displayResults(data) {
                 // Set to 'block' so the user sees the question immediately
                 html += `<div id="content-${strategy}" class="result-block" style="display: block;">`; 
                 html += `<p style="font-weight: bold;">${result.reason}</p>`;
-                // The new buttons
+                
                 html += `<div class="splice-prompt-buttons">
                              <button id="exonic-pathogenicity-yes" type="button" class="no-btn">Pathogenic Effects (independent of splicing)</button>
                              <button id="exonic-pathogenicity-no" type="button" class="yes-btn">No Pathogenic Effects (independent of splicing)</button>
@@ -925,9 +1040,9 @@ function displayResults(data) {
                          </div>`;
                 // Set to 'block' so the user sees the question immediately
                 html += `<div id="content-${strategy}" class="result-block" style="display: block;">`; 
-                // The new question
+               
                 html += `<p style="font-weight: bold;">Splicing effect was not found in databases. Is there a known splice-altering effect validated with qPCR or Transcriptomics?</p>`;
-                // The new buttons
+               
                 html += `<div class="splice-prompt-buttons">
                              <button id="splice-validation-yes" type="button" class="yes-btn">Yes</button>
                              <button id="splice-validation-no" type="button" class="no-btn">No</button>
@@ -961,20 +1076,17 @@ function displayResults(data) {
                 };
                 const tabId = strategyToTabMap[strategy];
                 const infoLink = tabId ? `<a href="/about#${tabId}" class="info-link" title="View methods for ${strategyName}">&#9432;</a>` : '';
-                // Map new WT Upregulation labels to existing CSS classes for color consistency
+                // Map WT Upregulation labels to existing CSS classes for color consistency
                 if (classificationClass === 'potential-possibilities-identified') {
                     classificationClass = 'likely-eligible';
                 } else if (classificationClass === 'no-potential-possibilities-identified') {
                     classificationClass = 'unlikely-eligible';
                 } else if (classificationClass === 'manual-assessment-required') {
-                    // NEW: Map 'Manual Assessment Required' to the 'Unable to Assess' style
+                    // Map 'Manual Assessment Required' to the 'Unable to Assess' style
                     classificationClass = 'unable-to-assess';
                 }
-                // --- END: CUSTOM CLASSIFICATION MAPPING ---
-
                 
                 html += `<div class="strategy-block">`;
-                // DUPLICATE HEADER REMOVED HERE
                 html += `<div id="toggle-${strategy}" class="result-header ${classificationClass} accordion-toggle" style="cursor: pointer; user-select: none;">
                              <h4>${strategyName} ${infoLink} <span class="chip-status status-${classificationClass}">${result.classification || "N/A"}</span> <span class="chevron">&#9662;</span></h4>
                          </div>`;
@@ -1028,7 +1140,7 @@ function displayResults(data) {
                     })();
                 }
 
-                if (result.checks && strategy !== 'Knockdown' && strategy !== 'WT_Upregulation' && (result.classification || '').toLowerCase() !== 'eligible') {
+                if (result.checks && strategy !== 'Knockdown' && strategy !== 'WT_Upregulation') {
                     const totalChecks = Object.keys(result.checks).length; 
                     const passedChecks = Object.values(result.checks).filter(c => c.passed).length;
                     const hasEffectiveOverrides = Object.values(result.checks).some(c => c.overridden && c.passed !== c.original_passed);
@@ -1138,10 +1250,9 @@ function displayResults(data) {
                 }
                 html += `</div></div>`;
             }
-            // --- END: MODIFIED LOGIC ---
         }
     }
-    
+
     // Add Commentary & Download section at the end
     html += `<div class="strategy-block">
                 <div id="toggle-report" class="result-header unable-to-assess accordion-toggle" style="cursor: pointer; user-select: none;">
@@ -1321,6 +1432,18 @@ function downloadReport() {
 {% endblock %}
 """
 
+    usage_html = """
+{% extends "base.html" %}
+{% block content %}
+<h3>Usage</h3>
+<h4>Single variant assessment:</h4>
+<p>The user should enter a variant according to the HGVS nomenclature to assess it for the eligibility towards antisense oligonucleotide (ASO) treatment. The user may enter a different mode of inheritance by selecting ‘XD’ for X-linked dominant inheritance, ‘XR’ for X-linked recessive inheritance, ‘AD’ for autosomal-dominant inheritance or ‘AR’ for autosomal-recessive inheritance. Additionally the user may select a pathomechanism to assess mechanism-specific strategies: ‘GoF’, if the variant is a gain-of-function variant, ‘LoF’ if it is a loss-of-function variant or ‘DN’ if it is a dominant-negative variant.</p> 
+<p>Any other information from the underlying datasources can be manually overridden by clicking on the respective guideline check and pressing the button to ‘commit manual override’. The results can be downloaded with any additional comments in a specific commentary field.</p>
+<h4>Batch assessment:</h4>
+<p>If the user wants assess several variants at a time, they can download the batch template and enter variants and possible manual overrides. After the variants have been assessed, a file containing the variant assessment information will be created for download.</p>
+{% endblock %}
+"""
+
     about_html = """
 {% extends "base.html" %}
 {% block content %}
@@ -1388,6 +1511,7 @@ function downloadReport() {
     <button class="tab-btn" onclick="openTab('skipping')">Exon Skipping</button>
     <button class="tab-btn" onclick="openTab('knockdown')">Knockdown</button>
     <button class="tab-btn" onclick="openTab('wt')">WT Upregulation</button>
+    <button class="tab-btn" onclick="openTab('avec')">AVEC</button>
 </div>
 
 <div id="general" class="tab-pane active">
@@ -2033,7 +2157,7 @@ function downloadReport() {
     </table>
 </div>
 
-<<div id="wt" class="tab-pane">
+<div id="wt" class="tab-pane">
     <h4>Considerations for Upregulation from the Wildtype Allele</h4>
     <p>
         For disorders caused by haploinsufficiency, one functional wildtype gene copy remains. In these situations, one can use ASOs to upregulate the wildtype allele. This approach, also known as targeted augmentation of nuclear gene output (TANGO) (Lim et al., 2020), can include skipping of poison exons, downregulating naturally occurring antisense transcripts, and targeting UTR regulator elements such as upstream open reading frames, all of which can increase the gene product. For a more detailed explanation of these approaches, see the Background, Fig. 3, Fig. 11, and the following publications:
@@ -2112,6 +2236,23 @@ function downloadReport() {
     </p>
 </div>
 
+<div id="avec" class="tab-pane">
+    <h4>AVEC</h4>
+    <p>AVEC follows the logic outlined in the updated VARIANT guidelines. It draws upon ClinGen to assess the variants mode-of-inheritance, but if the mode-of-inheritance specified by ClinGen does not resemble the variants mode-of-inheritance the user may override the mode-of-inheritance.</p>
+    
+    <h5>Splice correction</h5>
+    <p>The variant is compared to SpliceVarDB filtered for RNA-seq and qPCR methods to assess experimental validation of splice altering effects.If none are found the user can manually input if splice-altering effects have been validated with qPCR or RNA-seq. If the user verifies splice-altering effects, the variant is assessed according to the guidelines (see Splice correction). If there is not, the variant is categorized as ‘unable to assess. All variants with known splice-altering effects are assessed according to the acceptor/donor distance only, therefore experimental validation of no branch point weakening should overturn this simplistic calculation.</p>
+    
+    <h5>Exon skipping</h5>
+    <p>The Variant is compared to the N1C-registry to assess existing therapies. ‘OligoGym’. For exon skipping assessment AVEC is heavily reliant on the Ensembl REST API with the Hg38 as the reference genome. It Maps the variant with the Ensembl Variant effect predictor and uses the coordinates to map it to the MANE select or Ensembl canonical transcript. To acquire functional domain annotation, the genomic exon coordinates are compared to the databases CDD, Pfam, SMART, PROSITE profiles, PROSITE patterns SUPERFAMILY, PRINTS, TIGRFAM and ProDom which are then reduced to unique Interpro annotations. Exon length, coding sequence length and stop codon creation is assessed based on data gathered from the Ensembl REST API for the MANE select or if not available, the Ensembl canonical transcript. Clinical significance of variants inside the exon is gathered via the Ensembl variant effect predictor. AVEC defines mutational (missense) hotspots as: amount of pathogenic missense variants &gt; amount of pathogenic nonsense and frameshift variants + 3. Functional evidence for exon skipping to be pathogenic is gathered through splice donor/acceptor variants categorized as “pathogenic” or “likely pathogenic” on the variant effect predictor. Functional evidence of in-frame deletions to be pathogenic is gathered for in-frame deletion variant categorized as “pathogenic” or “likely pathogenic” on the variant effect predictor. Variant (or exon) eligibility towards exon skipping is assessed according to the updated VARIANT guidelines (See Exon skipping section).</p>
+    
+    <h5>WT-Upregulation</h5>
+    <p>If the variant is located on a gene specified as dominant loss of function the variant is assessed for WT-upregulation. The assessment is done by looking for uORFs, natural antisense transcripts or poison exons (see supplementary table of the publication).</p>
+    
+    <h5>ASO mediated Knockdown</h5>
+    <p>If the variant is located on a gene specified as gain-of-function or dominant-negative it is assessed for knockdown by filtering for haploinsufficiency or a known pathogenic autosomal-dominant loss-of-function variant according to the ClinGen Consortium. For dominant negative variants a warning is given, that ASO-mediated knockdown must be allele-specific to ensure the expression of the wildtype allele. If there is a dominant inheritance and a LoF pathomechanism or sufficient evidence for haploinsufficiency, the variant is ranked “unlikely eligible”, because knockdown might lead to the development of a haploinsufficient phenotype. Otherwise, the variant is ranked as “likely eligible”.</p>
+</div>
+
 <script>
     function openTab(tabId) {
         // Hide all tab panes
@@ -2154,7 +2295,7 @@ function downloadReport() {
 <h3>AVEC API Documentation</h3>
 <p>
     The AVEC API provides programmatic access to the variant assessment tool. 
-    You can retrieve the same detailed analysis available through the batch processing tool via a simple GET request.
+    You can retrieve the same detailed analysis available through the web interface via a simple POST request.
 </p>
 
 <h4>Endpoint</h4>
@@ -2162,21 +2303,23 @@ function downloadReport() {
 <pre><code>{{ url_for('api_assess', _external=True) }}</code></pre>
 
 <h4>Request</h4>
-<p>The API accepts <strong>GET</strong> requests with a single required query parameter.</p>
+<p>The API accepts <strong>POST</strong> requests with a JSON body containing a single required key.</p>
 <ul>
-    <li><strong>Parameter:</strong> <code>query</code></li>
+    <li><strong>Key:</strong> <code>query</code></li>
     <li><strong>Description:</strong> The variant to assess in a recognized HGVS-like format.</li>
     <li><strong>Examples:</strong> <code>NM_015427.4:c.1054G>A</code>, <code>FKTN c.1312G>A</code></li>
 </ul>
 
 <h4>Example Usage (cURL)</h4>
-<pre><code>curl -X GET "{{ url_for('api_assess', _external=True) }}?query=NM_000552.4:c.545G>A"</code></pre>
+<pre><code>curl -X POST "{{ url_for('api_assess', _external=True) }}" \
+     -H "Content-Type: application/json" \
+     -d '{"query": "NM_018026.4:c.607C>T"}'</code></pre>
 
 <h4>Response</h4>
 <p>The API returns a JSON object containing the full assessment, structured identically to the data used by the web interface.</p>
 <ul>
     <li>On success (HTTP 200), the response will contain `summary` and `assessments` objects.</li>
-    <li>On failure (e.g., invalid query or server error), it will return a JSON object with an `error` key.</li>
+    <li>On failure (e.g., invalid query or server error), it will return a JSON object with an `error` key and an appropriate HTTP status code (400, 404, 500).</li>
 </ul>
 
 <h5>Example Successful Response Snippet</h5>
@@ -2184,7 +2327,11 @@ function downloadReport() {
   "assessments": {
     "Exon_Skipping": {
       "checks": {
-        "Benign splice variant found": false,
+        "Benign splice variant found": {
+          "original_passed": false,
+          "overridden": false,
+          "passed": false
+        },
         "Is <10% of Protein": true,
         "Is In-Frame": true,
         ...
@@ -2217,9 +2364,11 @@ function downloadReport() {
     # Write files with explicit UTF-8 encoding
     with open('templates/base.html', 'w', encoding='utf-8') as f: f.write(base_html)
     with open('templates/index.html', 'w', encoding='utf-8') as f: f.write(index_html)
+    with open('templates/usage.html', 'w', encoding='utf-8') as f: f.write(usage_html)
     with open('templates/about.html', 'w', encoding='utf-8') as f: f.write(about_html)
     with open('templates/cite.html', 'w', encoding='utf-8') as f: f.write(cite_html)
     with open('templates/api_docs.html', 'w', encoding='utf-8') as f: f.write(api_docs_html)
+
 # Run the setup function to ensure templates exist
 setup_templates()
 
@@ -2747,7 +2896,13 @@ def check_n1c_registry(gene_symbol: str, original_query: str, formatted_hgvs: st
             status = row.get('Status', 'N/A')
             modality = row.get('Therapeutic Modality', 'N/A')
             therapypublication = row.get('Therapy Publication','N/A')
-            n1cid = row.get('ID')
+            n1cid = int(row.get('ID'))
+            
+            try:
+                if pd.notna(n1cid):
+                    n1cid = int(float(n1cid))
+            except (ValueError, TypeError):
+                pass
             
             return {
                 "classification": "Eligible",
@@ -2843,6 +2998,8 @@ def check_n1c_assessed_variants(gene_symbol: str, formatted_hgvs: str) -> Option
             variant_id_val = row.get('ID')
             if variant_id_val not in (None, "", float('nan')):
                 try:
+                    if pd.notna(variant_id_val):
+                        variant_id_val = int(float(variant_id_val))
                     link = f"https://generegistry.n1collaborative.org/variant_entry.html?id={variant_id_val}"
                 except Exception:
                     link = None
@@ -2983,6 +3140,11 @@ def n1c_exon_skipping_exon_numbers_for_gene(gene_symbol: str) -> Tuple[set, List
             nid = row.get('ID')
             if nid is not None and str(nid).strip() and str(nid).strip().lower() != 'nan':
                 link = f"https://generegistry.n1collaborative.org/entry.html?id={str(nid).strip()}"
+                try:
+                    nid = int(float(nid))
+                except (ValueError, TypeError):
+                    pass
+                link = f"https://generegistry.n1collaborative.org/entry.html?id={nid}"
         except Exception:
             link = None
 
@@ -3057,6 +3219,11 @@ def n1c_exon_skipping_variant_exon_map(gene_symbol: str, all_exons: List[Dict[st
                 nid = row.get('ID')
                 if nid is not None and str(nid).strip() and str(nid).strip().lower() != 'nan':
                     link = f"https://generegistry.n1collaborative.org/entry.html?id={str(nid).strip()}"
+                    try:
+                        nid = int(float(nid))
+                    except (ValueError, TypeError):
+                        pass
+                    link = f"https://generegistry.n1collaborative.org/entry.html?id={nid}"
             except Exception:
                 link = None
             if link:
@@ -3098,6 +3265,11 @@ def n1c_gene_knockdown_entry(gene_symbol: str) -> Optional[Dict[str, Any]]:
             nid = row.get('ID')
             if nid is not None and str(nid).strip() and str(nid).strip().lower() != 'nan':
                 link = f"https://generegistry.n1collaborative.org/entry.html?id={str(nid).strip()}"
+                try:
+                    nid = int(float(nid))
+                except (ValueError, TypeError):
+                    pass
+                link = f"https://generegistry.n1collaborative.org/entry.html?id={nid}"
         except Exception:
             link = None
         modality = row.get('Therapeutic Modality') if isinstance(row.get('Therapeutic Modality'), str) else row.get('Approach')
@@ -3129,7 +3301,7 @@ def get_gene_characteristics(gene_symbol: str) -> Dict[str, Any]:
         "triplosensitivity": {"text": "Unknown", "url": None}, # Added init
         "moa": [],
         "gene_url": None,
-        "rcnv": {"pHaplo": "N/A", "pTriplo": "N/A", "url": "https://doi.org/10.1016/j.cell.2022.06.036"} # [NEW] Init rCNV
+        "rcnv": {"pHaplo": "N/A", "pTriplo": "N/A", "url": "https://doi.org/10.1016/j.cell.2022.06.036"} # Init rCNV
     }
 
     # Use the global rcnv_df loaded in load_databases()
@@ -3215,7 +3387,7 @@ def assess_knockdown(gene_characteristics: Dict[str, Any], overrides: Dict[str, 
     haplo_status_text = haplo_obj.get("text", "Unknown")
     
     moi = gene_characteristics.get("moi", [])
-    # --- NEW: Logic to track original vs overridden state ---
+    # --- Logic to track original vs overridden state ---
     check_name = "Gene is not haploinsufficient"
     original_passed = haplo_status_text in ["No evidence", "Little evidence", "Dosage sensitivity unlikely"]
     
@@ -3660,7 +3832,7 @@ def assess_consecutive_exons(client, transcript, all_exons, target_exon, vep_ent
             
     return best_res
 
-def assess_single_exon(client, original_query, transcript, all_exons, target_exon, vep_entry: Dict[str, Any], overrides: Dict[str, bool] = {}, refseq_id_for_viewer: Optional[str] = None):
+def assess_single_exon(client, original_query, transcript, all_exons, target_exon, vep_entry: Dict[str, Any], overrides: Dict[str, bool] = {}, refseq_id_for_viewer: Optional[str] = None, aso_exists: bool = False):
     # --- Step 1: Data Gathering and Calculations ---
     # Set precision for Decimal calculations
     getcontext().prec = 10
@@ -3791,6 +3963,7 @@ def assess_single_exon(client, original_query, transcript, all_exons, target_exo
     original_conds['cond7_splice'] = counts['splice'] == 0
     original_conds['cond8_no_inframe_del'] = counts['inframe_del'] == 0
     original_conds['cond9_benign_splice'] = counts['benign_splice'] > 0
+    original_conds['aso_exists'] = aso_exists
 
     # --- Step 2.5: Apply Overrides to get FINAL states ---
     # Start with original values, then overwrite if an override exists
@@ -3849,6 +4022,7 @@ def assess_single_exon(client, original_query, transcript, all_exons, target_exo
     cond8_no_inframe_del = overrides.get('No Pathogenic In-Frame Deletions', original_conds['cond8_no_inframe_del'])
     cond9_benign_splice = overrides.get('Benign splice variant found', original_conds['cond9_benign_splice'])
     cond10_no_new_codon = overrides.get('No New Codon Formation', original_conds['cond10_no_new_codon'])
+    aso_exists_final = overrides.get('ASO already exists', original_conds['aso_exists'])
     has_override = bool(overrides)
     
     # Check if any override actually changed the outcome
@@ -3860,12 +4034,15 @@ def assess_single_exon(client, original_query, transcript, all_exons, target_exo
             'No Domain Overlap': cond5_no_domain != original_conds['cond5_no_domain'], 'Low Missense Count': cond6_missense != original_conds['cond6_missense'],
             'No Pathogenic Splice Variants': cond7_splice != original_conds['cond7_splice'], 'No Pathogenic In-Frame Deletions': cond8_no_inframe_del != original_conds['cond8_no_inframe_del'],
             'Benign splice variant found': cond9_benign_splice != original_conds['cond9_benign_splice'],
-            'No New Codon Formation': cond10_no_new_codon != original_conds['cond10_no_new_codon']
+            'No New Codon Formation': cond10_no_new_codon != original_conds['cond10_no_new_codon'],
+            'ASO already exists': aso_exists_final != original_conds['aso_exists']
         }
         is_changed = any(check_map.get(check_name, False) for check_name in overrides)
 
     # --- Step 3: Classification Logic Chain ---
-    if not cond3_not_terminal:
+    if aso_exists_final:
+        classification, reason = "Eligible", "An ASO targeting this exon already exists."
+    elif not cond3_not_terminal:
         classification, reason = "Not Eligible", "Exon is the first or last coding exon."
     else:
         # Check consecutive exons if originally out of frame, regardless of override status of 'Is In-Frame'
@@ -3987,6 +4164,7 @@ def assess_single_exon(client, original_query, transcript, all_exons, target_exo
         "transcript_id": transcript_id,
         "clinvar_url": clinvar_url,
         "checks": {
+            "ASO already exists": {"passed": aso_exists_final, "original_passed": original_conds['aso_exists'], "overridden": 'ASO already exists' in overrides},
             "Benign splice variant found": {"passed": cond9_benign_splice, "original_passed": original_conds['cond9_benign_splice'], "overridden": 'Benign splice variant found' in overrides},
             "Is In-Frame": {"passed": cond1_inframe, "original_passed": original_conds['cond1_inframe'], "overridden": 'Is In-Frame' in overrides},
             "No New Stop Codon": {"passed": cond2_no_stop, "original_passed": original_conds['cond2_no_stop'], "overridden": 'No New Stop Codon' in overrides},
@@ -4057,12 +4235,15 @@ def process_single_variant(query: str, client: EnsemblClient, splice_user_input:
         # Attempt 1: Check the chosen target_consequence directly
         if 'hgvsp' in target_consequence:
             protein_effect = target_consequence['hgvsp'].split(':')[-1]
-            
+            protein_effect = target_consequence['hgvsp']
+        print(protein_effect)
+        
         # Format HGVSp to include parentheses for predicted effect: ID:p.(Effect)
         if protein_effect and ':p.' in protein_effect and ':p.(' not in protein_effect:
             parts = protein_effect.split(':p.')
             if len(parts) == 2:
                 protein_effect = f"{parts[0]}:p.({parts[1]})"
+
         # Attempt 2: Fallback to Consequence Type
         if not protein_effect:
             terms = target_consequence.get('consequence_terms', [])
@@ -4070,9 +4251,6 @@ def process_single_variant(query: str, client: EnsemblClient, splice_user_input:
                 protein_effect = ", ".join(terms).replace('_', ' ').title()
             else:
                 protein_effect = "Unable to calculate"
-
-        if protein_effect:
-            protein_effect = protein_effect.replace('(', '').replace(')', '').replace('/', '>')
 
         final_result = {
             "summary": {
@@ -4098,6 +4276,7 @@ def process_single_variant(query: str, client: EnsemblClient, splice_user_input:
 
         # --- 5. Gene-Level Strategies (Knockdown, WT Upregulation) ---
         # Determine resolved MoA: user selection takes precedence; otherwise a single known MoA
+        # Force user selection for MoA; do not auto-resolve from database
         resolved_moa = moa_user_input if moa_user_input in ("GoF", "LoF", "DN") else None
         # Expose resolved_moa for frontend rendering while preserving original Known Mechanism
         final_result["summary"]["resolved_moa"] = resolved_moa
@@ -4105,7 +4284,7 @@ def process_single_variant(query: str, client: EnsemblClient, splice_user_input:
             moi = set(gene_characteristics.get("moi", []))
             
             if resolved_moa in("GoF", "DN"):
-                is_ad = any("autosomal dominant" or "x-linked inheritance" in str(m).lower() for m in moi)
+                is_ad = any("autosomal dominant" in str(m).lower() or "x-linked dominant" in str(m).lower() for m in moi)
                 if is_ad:
                     n1c_gene_kd = n1c_gene_knockdown_entry(gene_symbol)
                     if n1c_gene_kd:
@@ -4123,8 +4302,8 @@ def process_single_variant(query: str, client: EnsemblClient, splice_user_input:
 
             if resolved_moa in("GoF"):
 
-                is_xlinked = any("x-linked inheritance" or "autosomal recessive" in str(m).lower() for m in moi)
-                if is_xlinked:
+                is_xlinked_or_ar = any("x-linked" in str(m).lower() or "autosomal recessive" in str(m).lower() for m in moi)
+                if is_xlinked_or_ar:
                     n1c_gene_kd = n1c_gene_knockdown_entry(gene_symbol)
                     if n1c_gene_kd:
                         final_result["assessments"]["N1C_Gene_Knockdown"] = n1c_gene_kd
@@ -4140,6 +4319,12 @@ def process_single_variant(query: str, client: EnsemblClient, splice_user_input:
                 is_lof_ad = any("autosomal dominant inheritance" in str(m).lower() for m in moi)
                 if is_lof_ad:
                     final_result["assessments"]["WT_Upregulation"] = assess_wt_upregulation(client, gene_id, gene_symbol)
+                is_x_linked_dominant = any("x-linked dominant inheritance" in str(m).lower() for m in moi)
+                if is_x_linked_dominant:
+                    wt_upregulation_assessment = assess_wt_upregulation(client, gene_id, gene_symbol)
+                    wt_upregulation_assessment["note"] = "WT-upregulation only possible if more than one X-Chromosome is available"
+                    final_result["assessments"]["WT_Upregulation"] = wt_upregulation_assessment
+                    final_result["summary"]["note"] = "WT-upregulation only possible if more than one X-Chromosome is available"
 
         # --- 6. Variant-Specific Strategies (Splice & Exon Skipping) ---
         
@@ -4174,10 +4359,7 @@ def process_single_variant(query: str, client: EnsemblClient, splice_user_input:
                 v_start, v_end = vep_entry['start'], vep_entry['end']
                 target_exon = next((ex for ex in all_exons if ex['seq_region_name'] == vep_entry['seq_region_name'] and max(v_start, ex['start']) <= min(v_end, ex['end'])), None)
                 
-                if target_exon:
-                    exon_skip_result = assess_single_exon(client, query, transcript_data, all_exons, target_exon, vep_entry, overrides=exon_skipping_overrides, refseq_id_for_viewer=refseq_id_for_viewer)
-                    if "visualization" in exon_skip_result and exon_skip_result["visualization"]:
-                        final_result["visualization"] = exon_skip_result.pop("visualization")
+                if target_exon:                    
                     # N1C registry exon-skipping support: if N1C lists exon skipping for this exon, mark eligible
                     try:
                         n1c_exons, n1c_links, n1c_exon_link_map = n1c_exon_skipping_exon_numbers_for_gene(gene_symbol)
@@ -4198,6 +4380,12 @@ def process_single_variant(query: str, client: EnsemblClient, splice_user_input:
                         matched_links.extend(n1c_exon_link_map.get(exon_num, []))
                         if not matched_links and n1c_links:
                             matched_links.extend(n1c_links)
+
+                    aso_exists_for_exon_skip = bool(variant_links or has_text_match)
+
+                    exon_skip_result = assess_single_exon(client, query, transcript_data, all_exons, target_exon, vep_entry, overrides=exon_skipping_overrides, refseq_id_for_viewer=refseq_id_for_viewer, aso_exists=aso_exists_for_exon_skip)
+                    if "visualization" in exon_skip_result and exon_skip_result["visualization"]:
+                        final_result["visualization"] = exon_skip_result.pop("visualization")
 
                     if variant_links or has_text_match:
                         exon_skip_result = dict(exon_skip_result)
@@ -4243,6 +4431,8 @@ load_databases()
 
 @app.route('/')
 def index(): return render_template('index.html', title="Tool")
+@app.route('/usage')
+def usage(): return render_template('usage.html', title="Usage")
 @app.route('/about')
 def about(): return render_template('about.html', title="About/Methods")
 @app.route('/cite')
@@ -4253,20 +4443,22 @@ def api_docs():
     """Serves the API documentation page."""
     return render_template('api_docs.html', title="API Documentation")
 
-@app.route('/api/v1/assess', methods=['GET'])
+@app.route('/api/v1/assess', methods=['POST'])
 def api_assess():
     """
-    Handles a single variant assessment via a GET request for programmatic access.
+    Handles a single variant assessment via a POST request for programmatic access.
     Returns the full assessment data as JSON.
     """
-    query = request.args.get('query')
-    if not query:
-        return jsonify({"error": "The 'query' parameter is required."}), 400
+    data = request.get_json()
+    if not data or 'query' not in data:
+        return jsonify({"error": "Request body must be JSON with a 'query' key."}), 400
+
+    query = data['query']
 
     client = EnsemblClient()
     result = process_single_variant(query, client)
     
-    # Provide more specific HTTP status codes based on the outcome
+    # Provide specific HTTP status codes based on the outcome
     classification = result.get("classification")
     if classification == "Error":
         return jsonify({"error": result.get("reason", "An internal server error occurred.")}), 500
@@ -4288,8 +4480,9 @@ def assess():
     es_overrides = data.get('exon_skipping_overrides', {})
     kd_overrides = data.get('knockdown_overrides', {})
     wt_overrides = data.get('wt_upregulation_overrides', {})
+    gene_char_overrides = data.get('gene_characteristics_overrides', None)
     client = EnsemblClient()
-    result = process_single_variant(query, client, splice_user_input=splice_input, moa_user_input=moa_input, exonic_pathogenic_user_input=exonic_pathogenic_user_input, exon_skipping_overrides=es_overrides, knockdown_overrides=kd_overrides, wt_upregulation_overrides=wt_overrides)
+    result = process_single_variant(query, client, splice_user_input=splice_input, moa_user_input=moa_input, exonic_pathogenic_user_input=exonic_pathogenic_user_input, exon_skipping_overrides=es_overrides, knockdown_overrides=kd_overrides, wt_upregulation_overrides=wt_overrides, gene_characteristics_overrides=gene_char_overrides)
     
     return jsonify(result)
 @app.route('/batch_assess', methods=['POST'])
@@ -4417,8 +4610,6 @@ def batch_assess():
         haplo_info = summary.get("haploinsufficiency", {})
         row["Haploinsufficiency"] = haplo_info.get("text", "N/A")
         row["ClinGen Link"] = haplo_info.get("url", "N/A")
-        
-        # --- START: NEW COLUMN LOGIC ---
 
         # 1. Assess if an ASO exists and add the N1C link(s)
         n1c_registry = assessments.get("N1C_Registry_Check", {}) or {}
@@ -4436,9 +4627,6 @@ def batch_assess():
         wt_up = assessments.get("WT_Upregulation", {})
         antisense_ids = wt_up.get("antisense_gene_ids", [])
         row["Antisense Transcript ID"] = ", ".join(antisense_ids) if antisense_ids else "N/A"
-
-        # --- END: NEW COLUMN LOGIC ---
-
         # Exon Skipping
         skip = assessments.get("Exon_Skipping", {})
         row["Exon Skipping Assessment"] = skip.get("classification", "NA")
@@ -4550,7 +4738,7 @@ def batch_assess():
         download_name='avec_batch_results.xlsx',
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
-    
+
 @app.route('/download_batch_template')
 def download_batch_template():
     """Serves the batch processing template file."""
@@ -4566,8 +4754,4 @@ def download_batch_template():
         )
     except FileNotFoundError:
         return "Template file not found on server.", 404
-
-
-
-
 
