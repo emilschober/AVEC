@@ -2438,7 +2438,7 @@ def load_databases():
             print(f"Warning: Could not load N1C_Variant_Supp_Table.xlsx: {e}")
 
         # Fetch and load N1C variants data
-        response = requests.get(N1C_API_URL, timeout=30)
+        response = requests.get(N1C_API_URL, timeout=100)
         response.raise_for_status() # Will raise an error if the request fails
         n1c_data = response.json()
         n1c_variants_df = pd.DataFrame(n1c_data)
@@ -2450,7 +2450,7 @@ def load_databases():
             n1c_variants_df['Coding DNA change (c.)'] = n1c_variants_df['Coding DNA change (c.)'].astype(str).str.strip()
 
         # Fetch and load N1C assessed variants (curated) data
-        response2 = requests.get(N1C_API_ASSESSED_URL, timeout=30)
+        response2 = requests.get(N1C_API_ASSESSED_URL, timeout=100)
         response2.raise_for_status()
         n1c_assessed_data = response2.json()
         n1c_assessed_df = pd.DataFrame(n1c_assessed_data)
@@ -2513,7 +2513,7 @@ class EnsemblClient:
         for attempt in range(max_retries):
             time.sleep(self.delay)
             try:
-                resp = self.session.get(url, params=params, timeout=30)
+                resp = self.session.get(url, params=params, timeout=100)
                 if resp.status_code == 200:
                     try: return resp.json()
                     except ValueError: return resp.text
