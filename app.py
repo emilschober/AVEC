@@ -340,6 +340,29 @@ window.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+// --- Helper to consolidate summary notes ---
+function appendUserNotes(data) {
+    if (!data.summary) return;
+    let notes = [];
+    if (data.summary.note) notes.push(data.summary.note);
+    
+    if (window.userMoaInput) {
+        notes.push(`User pathomechanism override: ${window.userMoaInput}`);
+    }
+    
+    if (window.userMoiOverride && window.userMoiOverride.moi && window.userMoiOverride.moi.length > 0) {
+        const m = window.userMoiOverride.moi[0];
+        let choice = '';
+        if (m.includes('Autosomal dominant')) choice = 'AD';
+        else if (m.includes('Autosomal recessive')) choice = 'AR';
+        else if (m.includes('X-linked dominant')) choice = 'XD';
+        else if (m.includes('X-linked recessive')) choice = 'XR';
+        if (choice) notes.push(`User MOI override to: ${choice}.`);
+    }
+    
+    if (notes.length > 0) data.summary.note = [...new Set(notes)].join('<br>');
+}
+
 // Persist user selections across reassessments within the page lifecycle
 window.userSpliceInput = null; // 'yes' | 'no' | null
 window.userCommentary = '';
@@ -509,6 +532,7 @@ async function reassessWithSpliceInput(spliceInput) {
         // persist the user's splice selection
         window.userSpliceInput = spliceInput;
         
+        appendUserNotes(data);
         // Save session state
         saveSession(data, queryVal, spliceInput, window.userMoaInput, 
             document.getElementById('user-commentary')?.value,
@@ -553,17 +577,10 @@ async function reassessWithMoaInput(moaChoice) {
         });
         const data = await response.json();
 
-        // Add a note in the summary to reflect the user override
-        if (data.summary) {
-            const chosen = moaChoice;
-            if (!data.summary.note) data.summary.note = '';
-            data.summary.note = (data.summary.note ? data.summary.note + ' ' : '') +
-                `user selection: ${chosen}`;
-        }
-
         // persist the user's MoA selection
         window.userMoaInput = moaChoice;
         
+        appendUserNotes(data);
         // Save session state
         saveSession(data, queryVal, window.userSpliceInput, moaChoice, 
             document.getElementById('user-commentary')?.value,
@@ -620,13 +637,7 @@ async function reassessWithMoiOverride(moiChoice) {
         });
         const data = await response.json();
         
-        // Add a note to the summary
-        if (data.summary) {
-            if (!data.summary.note) data.summary.note = '';
-            data.summary.note = (data.summary.note ? data.summary.note + ' ' : '') +
-                `MOI overridden by user to: ${moiChoice}.`;
-        }
-
+        appendUserNotes(data);
         saveSession(data, queryVal, window.userSpliceInput, window.userMoaInput, window.userCommentary, window.userEsOverrides, window.userKdOverrides, window.userWtOverrides, window.userMoiOverride);
         displayResults(data);
     } catch (error) {
@@ -664,6 +675,7 @@ async function reassessWithGuidelineOverrides(strategy, overrides) {
     try {
         const response = await fetch('/assess', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         const data = await response.json();
+        appendUserNotes(data);
         saveSession(data, queryVal, window.userSpliceInput, window.userMoaInput, window.userCommentary, window.userEsOverrides, window.userKdOverrides, window.userWtOverrides, window.userMoiOverride);
         displayResults(data);
     } catch (error) {
@@ -707,6 +719,7 @@ async function reassessWithExonicPathogenicityInput(pathogenicityChoice) {
         window.userExonicPathogenicityInput = pathogenicityChoice;
 
         // Save session and display
+        appendUserNotes(data);
         saveSession(data, queryVal, window.userSpliceInput, window.userMoaInput, window.userCommentary, window.userEsOverrides, window.userKdOverrides, window.userWtOverrides, window.userMoiOverride);
         displayResults(data);
     } catch (error) {
@@ -883,7 +896,7 @@ function displayResults(data) {
                                 <li><strong>pTriplo:</strong> ${pTriploHTML}</li> 
                                 <li><strong>Orphanet:</strong> ${orphaLinkHTML}</li>
                                 <li><strong>ClinGen Pathomechanism:</strong> ${(data.summary.moa && data.summary.moa.join(', ')) || 'N/A'}</li>
-                                ${data.summary.note ? `<li><strong>Note:</strong> ${data.summary.note}</li>` : ''}
+                                ${data.summary.note ? `<li><strong>Notes:</strong> ${data.summary.note}</li>` : ''}
                                 </ul></div>`;
        }
 
@@ -1382,13 +1395,23 @@ function downloadReport() {
                 body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 2em auto; padding: 0 1em; }
                 h1, h2, h3 { color: #005a9c; border-bottom: 1px solid #eee; padding-bottom: 0.3em; }
                 a { color: #005a9c; }
-                .summary-block, .assessment-block { border: 1px solid #ddd; border-radius: 8px; padding: 1em; margin-bottom: 1.5em; background-color: #f9f9f9; }
+                .summary-block, .assessment-block, .moa-block { border: 1px solid #ddd; border-radius: 8px; padding: 1em; margin-bottom: 1.5em; background-color: #f9f9f9; }
                 .summary-block ul { list-style: none; padding: 0; }
                 .summary-block li { margin-bottom: 0.5em; }
                 .assessment-block h3 { margin-top: 0; font-size: 1.2em; }
                 .disclaimer { font-size: 0.8em; color: #777; text-align: center; margin-top: 2em; }
                 .commentary { background-color: #fffbeb; border-color: #fde68a; }
                 pre { background-color: #f0f0f0; border: 1px solid #ddd; border-radius: 4px; padding: 1em; white-space: pre-wrap; word-wrap: break-word; }
+                
+                /* Guideline Checks */
+                .checklist { list-style-type: none; padding: 0; }
+                .checklist li { margin-bottom: 0.5em; }
+                .checklist li.pass::before { content: '✔'; color: #28a745; margin-right: 10px; font-weight: bold; }
+                .checklist li.fail::before { content: '✖'; color: #dc3545; margin-right: 10px; font-weight: bold; }
+                
+                /* Warnings */
+                .warning { color: #dc3545; font-weight: bold; }
+                .note { font-style: italic; color: #555; font-size: 0.9em; }
             </style>
         </head>
         <body>
@@ -1406,14 +1429,29 @@ function downloadReport() {
         reportHTML += `<h2>Query Summary</h2><div class="summary-block">${summaryContent.innerHTML}</div>`;
     }
 
+    // Capture standalone Mechanism of Action block (if present and not inside strategy-block)
+    const resultBlocks = document.querySelectorAll('.result-block');
+    resultBlocks.forEach(block => {
+        if (!block.closest('.strategy-block')) {
+            const h5 = block.querySelector('h5');
+            if (h5 && h5.innerText.includes('Mechanism of Action')) {
+                reportHTML += `<div class="moa-block"><h3>Mechanism of Action</h3>${block.innerHTML.replace('<h5>Mechanism of Action</h5>', '')}</div>`;
+            }
+        }
+    });
+
     reportHTML += `<h2>Therapeutic Assessments</h2>`;
     document.querySelectorAll('.strategy-block').forEach(block => {
         // Exclude the commentary/download block itself from the report
         if (block.querySelector('#toggle-report')) return;
         const header = block.querySelector('.result-header h4');
+        // Skip literature/pubmed blocks
+        if (header && (header.innerText.includes('Literature') || header.innerText.includes('PubMed'))) return;
+        // Skip interactive selection blocks (MOI override, MoA selection) in assessments
+        if (header && (header.innerText.includes('Mode of Inheritance') || header.innerText.includes('Mechanism of Action'))) return;
         const content = block.querySelector('.result-block');
         if (header && content) {
-            reportHTML += `<div class="assessment-block"><h3>${header.innerText.replace('▼', '').replace('▲', '')}</h3>${content.innerHTML}</div>`;
+            reportHTML += `<div class="assessment-block"><h3>${header.innerText.replace('▼', '').replace('▲', '').replace('&#9662;', '').replace('&#9652;', '')}</h3>${content.innerHTML}</div>`;
         }
     });
 
@@ -1440,7 +1478,7 @@ function downloadReport() {
 <p>The user should enter a variant according to the HGVS nomenclature to assess it for the eligibility towards antisense oligonucleotide (ASO) treatment. The user may enter a different mode of inheritance by selecting ‘XD’ for X-linked dominant inheritance, ‘XR’ for X-linked recessive inheritance, ‘AD’ for autosomal-dominant inheritance or ‘AR’ for autosomal-recessive inheritance. Additionally the user may select a pathomechanism to assess mechanism-specific strategies: ‘GoF’, if the variant is a gain-of-function variant, ‘LoF’ if it is a loss-of-function variant or ‘DN’ if it is a dominant-negative variant.</p> 
 <p>Any other information from the underlying datasources can be manually overridden by clicking on the respective guideline check and pressing the button to ‘commit manual override’. The results can be downloaded with any additional comments in a specific commentary field.</p>
 <h4>Batch assessment:</h4>
-<p>If the user wants assess several variants at a time, they can download the batch template and enter variants and possible manual overrides. After the variants have been assessed, a file containing the variant assessment information will be created for download.</p>
+<p>If the user wants to assess several variants at a time, they can download the batch template and enter variants and optional manual overrides. After the variants have been assessed, a file containing the variant assessment information will be created for download.</p>
 {% endblock %}
 """
 
@@ -2285,7 +2323,7 @@ function downloadReport() {
 {% block content %}
 <h3>How to cite</h3>
 <p>
-    Information on how to cite will be available here as soon as AVEC is published.
+    This website was developed by Emil Schober based on the VARIANT guidelines. Information on how to cite will be available here as soon as AVEC is published.
 </p>
 {% endblock %}
 """
@@ -2438,7 +2476,7 @@ def load_databases():
             print(f"Warning: Could not load N1C_Variant_Supp_Table.xlsx: {e}")
 
         # Fetch and load N1C variants data
-        response = requests.get(N1C_API_URL, timeout=(10,120))
+        response = requests.get(N1C_API_URL, timeout=30)
         response.raise_for_status() # Will raise an error if the request fails
         n1c_data = response.json()
         n1c_variants_df = pd.DataFrame(n1c_data)
@@ -2450,7 +2488,7 @@ def load_databases():
             n1c_variants_df['Coding DNA change (c.)'] = n1c_variants_df['Coding DNA change (c.)'].astype(str).str.strip()
 
         # Fetch and load N1C assessed variants (curated) data
-        response2 = requests.get(N1C_API_ASSESSED_URL, timeout=(10,120))
+        response2 = requests.get(N1C_API_ASSESSED_URL, timeout=30)
         response2.raise_for_status()
         n1c_assessed_data = response2.json()
         n1c_assessed_df = pd.DataFrame(n1c_assessed_data)
@@ -2513,7 +2551,7 @@ class EnsemblClient:
         for attempt in range(max_retries):
             time.sleep(self.delay)
             try:
-                resp = self.session.get(url, params=params, timeout=(10,120))
+                resp = self.session.get(url, params=params, timeout=30)
                 if resp.status_code == 200:
                     try: return resp.json()
                     except ValueError: return resp.text
@@ -3508,7 +3546,7 @@ def assess_wt_upregulation(client: EnsemblClient, gene_id: str, gene_symbol: str
 
         # Start details with curated statuses and cite the original guideline table
         details = dict(supp_details)
-        details["Datasource: TableS2 of N1C VARIANT Guidelines"] = "https://www.sciencedirect.com/science/article/pii/S0002929725000643#app2"
+        details["Datasource: Table S2 of N1C VARIANT Guidelines"] = "https://www.sciencedirect.com/science/article/pii/S0002929725000643#app2"
         # Add Ensembl NAT links if any were found
         if nat_list:
             for nat in nat_list:
@@ -4754,5 +4792,3 @@ def download_batch_template():
         )
     except FileNotFoundError:
         return "Template file not found on server.", 404
-
-
