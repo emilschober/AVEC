@@ -1,0 +1,10 @@
+
+{% extends "base.html" %}
+{% block content %}
+<h3>Usage</h3>
+<h4>Single variant assessment:</h4>
+<p>The user should enter a variant according to the HGVS nomenclature to assess it for the eligibility towards antisense oligonucleotide (ASO) treatment. The user may enter a different mode of inheritance by selecting ‘XD’ for X-linked dominant inheritance, ‘XR’ for X-linked recessive inheritance, ‘AD’ for autosomal-dominant inheritance or ‘AR’ for autosomal-recessive inheritance. Additionally the user may select a pathomechanism to assess mechanism-specific strategies: ‘GoF’, if the variant is a gain-of-function variant, ‘LoF’ if it is a loss-of-function variant or ‘DN’ if it is a dominant-negative variant.</p> 
+<p>Any other information from the underlying datasources can be manually overridden by clicking on the respective guideline check and pressing the button to ‘commit manual override’. The results can be downloaded with any additional comments in a specific commentary field.</p>
+<h4>Batch assessment:</h4>
+<p>If the user wants to assess several variants at a time, they can download the batch template and enter variants and optional manual overrides. After the variants have been assessed, a file containing the variant assessment information will be created for download.</p>
+{% endblock %}

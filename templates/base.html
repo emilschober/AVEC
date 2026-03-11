@@ -1,0 +1,207 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ title }} - AVEC</title>
+    <script src="https://cdn.jsdelivr.net/npm/igv@2.15.5/dist/igv.min.js"></script>
+    <style>
+        body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;margin:0;background-color:#f8f9fa;color:#333}
+        .container{max-width:900px;margin:auto;background:var(--card);padding:2em;border-radius:8px;box-shadow:0 4px 8px rgba(0,0,0,.1); margin-top: 2em; margin-bottom: 2em;}
+        h3,h4,h5{color:#005a9c} a{color:#005a9c; text-decoration: none;} a:hover{text-decoration: underline;}
+        nav {background-color: #333; padding: 1em; text-align: center;}
+        /* THIS IS THE ONLY CHANGE IN THIS BLOCK: Added API link */
+        nav a {color: white; margin: 0 15px; text-decoration: none; font-weight: bold;}
+        .disclaimer{font-size:.8em;color:#6c757d;margin-top:2em;text-align:center; padding-top: 1em; border-top: 1px solid #eee;}
+        form{display:grid;grid-template-columns:1fr;gap:1em;align-items:center;margin-bottom:2em}
+        input,button{padding:.75em;border-radius:4px;border:1px solid #ccc;font-size:1em;width:100%;box-sizing:border-box}
+        button{background-color:#007bff;color:white;font-weight:bold;cursor:pointer;border:none;width:auto;justify-self:end;padding:.75em 1.5em}
+        button:hover{background-color:#0056b3}
+        #loader{display:none;text-align:center;padding:1em;font-size:1.2em}
+        #results{display:none}.result-header{padding:1em;color:white;border-radius:4px 4px 0 0;margin-bottom:0;}.result-header h4{margin:0;font-size:1.5em;text-align:center;color:inherit;}
+        .result-block{border: 1px solid #ddd; border-top: none; padding: 1em; margin-bottom: 1.5em; border-radius: 0 0 4px 4px;}.result-block h5{margin-bottom:.5em;color:#495057;border-bottom:1px solid #eee;padding-bottom:.3em; margin-top: 0;}
+        .checklist{list-style-type:none;padding:0}.checklist li{margin-bottom:.5em}.pass::before{content:'¹3';color:#28a745;margin-right:10px;font-weight:bold}.fail::before{content:'¹7';color:#dc3545;margin-right:10px;font-weight:bold}
+        .eligible{background-color:#28a745}.likely-eligible{background-color:#17a2b8}.unlikely-eligible{background-color:#ffc107;color:#333 !important;}.not-eligible{background-color:#dc3545}.unable-to-assess{background-color:#6c757d}.error{background-color:#dc3545}.note{font-style:italic;color:#555;font-size:.9em}
+        .strategy-block {margin-bottom: 2em;}
+        .summary-block { background-color: #e9ecef; padding: 1em; border-radius: 4px; margin-bottom: 2em; }
+        #igv-container { border: 1px solid #ddd; margin-top: 2em; margin-bottom: 1.5em; }
+        /* Style for code blocks in API docs */
+        pre { background-color: #f0f0f0; border: 1px solid #ddd; border-radius: 4px; padding: 1em; white-space: pre-wrap; word-wrap: break-word; font-family: 'Courier New', Courier, monospace; }
+        /* PubMed results list */
+        .pubmed-list { list-style: none; margin: .5em 0 0 0; padding: 0; display: grid; gap: .75em; }
+        .pubmed-card { border: 1px solid var(--border); border-radius: 8px; padding: .75em .9em; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.03); }
+        .pubmed-title { font-weight: 600; margin: 0 0 .25em; color: #0f172a; }
+        .pubmed-meta { color: #555; font-size: 0.9em; }
+        .pubmed-card-footer { margin-top: .6em; text-align: right; }
+        .pubmed-article-link { display:inline-block; padding: .35em .6em; border: 1px solid var(--border); border-radius: 6px; text-decoration: none; color: #0c63bd; background:#f8fafc }
+        .pubmed-article-link:hover { background:#eef2f7 }
+        .pubmed-footer { margin-top: 1em; text-align: center; }
+        .pubmed-footer a { text-decoration: none; padding:.4em .75em; border-radius:6px; border:1px solid var(--border); color:#0c63bd; background:#fff }
+        .pubmed-footer a:hover { background:#f8fafc }
+        /* Domain list styling */
+        .domain-list { margin: .35em 0 0 0; padding-left: 1.1em; }
+        .domain-list li { margin: 0 0 .2em 0; }
+        /* PubMed accordion spacing */
+        .pubmed-accordion { margin-top: 1em; }
+        .pubmed-accordion .result-header, .pubmed-accordion .result-header h5 { color: #fff; }
+
+        /* Info icon for linking to methods */
+        .info-link { margin-left: 8px; color: inherit; text-decoration: none; font-size: 0.8em; opacity: 0.8; }
+        .info-link:hover { opacity: 1; }
+
+        /* Beauty overrides and enhancements */
+        :root{--primary:#0d6efd;--primary-dark:#0b5ed7;--text:#333;--muted:#6c757d;--bg:#f7f8fb;--card:#ffffff;--border:#e6e9ef;--ok:#28a745;--info:#17a2b8;--warn:#ffc107;--bad:#dc3545;--neutral:#6c757d}
+        body{background:linear-gradient(180deg,#f8fafc 0%,#eef2f7 100%)}
+        .container{max-width:980px;border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,.08)}
+        nav{background:#222;box-shadow:0 2px 6px rgba(0,0,0,.15);padding:.85em 1em}
+        nav{position:relative;display:flex;align-items:center;justify-content:center}
+        nav .links{display:flex;align-items:center;gap:12px}
+        nav .links a{opacity:.9;font-weight:600;margin:0 12px;color:#f3f3f3;text-decoration:none}
+        nav .links a:hover{opacity:1}
+        .theme-toggle{position:absolute;right:1rem;top:50%;transform:translateY(-50%);background:transparent;border:1px solid var(--border);color:#f3f3f3;border-radius:999px;padding:.35em .7em;cursor:pointer}
+        .theme-toggle:hover{background:rgba(255,255,255,.06)}
+        .disclaimer{font-size:.85em;border-top:1px solid var(--border)}
+        #assessment-form{grid-template-columns:120px 1fr auto}
+        #assessment-form label{margin:0;font-weight:600;color:#495057}
+        input,button{border-radius:6px;border:1px solid #cfd4dc}
+        button{background:var(--primary);box-shadow:0 2px 8px rgba(13,110,253,.25)}
+        button:hover{background:var(--primary-dark)}
+        .result-header{border-radius:10px 10px 0 0}
+        .result-header h4{font-size:1.2em;letter-spacing:.2px}
+        .accordion-toggle .chevron{display:inline-block;margin-left:.4em;transition:transform .2s ease}
+        .accordion-toggle.open .chevron{transform:rotate(180deg)}
+        /* Rounded corners when collapsed; squared bottom when open */
+        .accordion-toggle{border-radius:10px}
+        .accordion-toggle.open{border-radius:10px 10px 0 0}
+        .result-block{border:1px solid var(--border);border-top:none;border-radius:0 0 10px 10px;box-shadow:0 8px 18px rgba(0,0,0,.04)}
+        .result-block h5{color:#334155;border-bottom:1px solid var(--border)}
+        .summary-block{background:#eef2f7;border:1px solid var(--border);border-radius:10px}
+        .summary-block ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.6em 1em}
+        .summary-block li{background:#fff;border:1px solid var(--border);padding:.5em .75em;border-radius:8px}
+        /* Checklist visual polish and correct symbols */
+        .checklist{margin:0}
+        .checklist li{padding:.5em .75em;border-radius:6px;border:1px solid}
+        /* Ensure no duplicate icons from pseudo-elements */
+        .checklist li.pass::before, .checklist li.fail::before{content:'' !important; display:none}
+        .checklist li.pass{background:#ecfdf3;border-color:#c6f6d5;color:#14532d}
+        .checklist li.fail{background:#fef2f2;border-color:#fecaca;color:#7f1d1d}
+        .checklist li .ic{display:inline-block;width:1.25em;text-align:center;font-weight:700;margin-right:.4em}
+        /* Override checklist for interactive mode */
+        .checklist.interactive li { cursor: pointer; user-select: none; transition: background-color 0.1s ease, border-color 0.1s ease; position: relative; }
+        .checklist.interactive li:hover { background-color: #e9ecef; }
+        .checklist.interactive li:hover::after { content: 'click for manual override'; position: absolute; right: 10px; font-size: 0.85em; color: var(--muted); font-style: italic; }
+        body.dark .checklist.interactive li:hover { background-color: #1e293b; }
+        .override-controls { text-align: center; }
+
+        /* Chips and controls */
+        .chip{display:inline-block;padding:.15em .5em;border-radius:999px;font-size:.8em;border:1px solid var(--border);background:#fff;color:#334155;margin-left:.5em}
+        .chip-ok{background:#ecfdf3;border-color:#bbf7d0;color:#166534}
+        .chip-warn{background:#fffbeb;border-color:#fde68a;color:#92400e}
+        .expand-controls{display:flex;gap:.5em;justify-content:flex-end;margin: .25em 0 1em}
+        .expand-controls .secondary{background:#fff;color:#334155;border:1px solid var(--border);padding:.4em .8em;border-radius:6px;cursor:pointer}
+        .expand-controls .secondary:hover{background:#f8fafc}
+        /* Compact status chip for headers */
+        .chip-status{display:inline-block;padding:.15em .55em;border-radius:999px;font-size:.82em;border:1px solid var(--border);font-weight:600;margin-left:.5em}
+        .status-eligible{background:#14532d;color:#e6faef;border-color:#14532d}
+        .status-likely-eligible{background:#0f4c5c;color:#e7f6fb;border-color:#0e7490}
+        .status-unlikely-eligible{background:#fef3c7;color:#7c2d12;border-color:#f59e0b}
+        .status-not-eligible{background:#7f1d1d;color:#fee2e2;border-color:#991b1b}
+        .status-unable-to-assess{background:#334155;color:#e2e8f0;border-color:#334155}
+        .status-under-development{background:#334155;color:#e2e8f0;border-color:#334155}
+        .status-error{background:#991b1b;color:#fee2e2;border-color:#991b1b}
+        /* Professional-looking header colors */
+        .eligible{background:linear-gradient(135deg,#15803d,#22c55e); color:#fff}
+        .likely-eligible{background:linear-gradient(135deg,#0ea5e9,#06b6d4); color:#fff}
+        .unlikely-eligible{background:linear-gradient(135deg,#f59e0b,#fbbf24); color:#111827}
+        .not-eligible{background:linear-gradient(135deg,#dc2626,#ef4444); color:#fff}
+        .unable-to-assess{background:linear-gradient(135deg,#64748b,#94a3b8); color:#fff}
+        .under-development{background:linear-gradient(135deg,#64748b,#94a3b8); color:#fff}
+        .error{background:linear-gradient(135deg,#b91c1c,#ef4444); color:#fff}
+        /* Dark mode overrides */
+        body.dark{--bg:#0b1220;--card:#0f172a;--text:#e5e7eb;--muted:#94a3b8;--border:#1f2937;--primary:#60a5fa;--primary-dark:#3b82f6}
+        body.dark{color:var(--text)}
+        body.dark a{color:#93c5fd}
+        body.dark nav .links a, body.dark .theme-toggle{color:#e5e7eb}
+        body.dark .container{box-shadow:0 6px 18px rgba(0,0,0,.5)}
+        body.dark .summary-block{background:#111827;border-color:#1f2937}
+        body.dark .summary-block li{background:#0b1324;border-color:#1f2937;color:var(--text)}
+        body.dark .result-block{border-color:#1f2937;background:#0b1324;box-shadow:0 8px 18px rgba(0,0,0,.5)}
+        /* Dark mode form controls */
+        body.dark input, body.dark select, body.dark textarea{background:#0b1324;border:1px solid #1f2937;color:var(--text)}
+        body.dark .expand-controls .secondary{background:#0b1324;color:#e5e7eb;border:1px solid #1f2937}
+        body.dark .expand-controls .secondary:hover{background:#111827}
+        /* Dark mode checklist tints */
+        body.dark .checklist li.pass{background:#0f2e1c;border-color:#14532d;color:#bbf7d0}
+        body.dark .checklist li.fail{background:#2a1414;border-color:#7f1d1d;color:#fecaca}
+        /* Dark mode PubMed cards */
+        body.dark .pubmed-card{background:#0b1324;border-color:#1f2937}
+        body.dark .pubmed-title{color:#e5e7eb}
+        body.dark .pubmed-article-link{background:#0b1324;border-color:#1f2937;color:#93c5fd}
+        body.dark .pubmed-article-link:hover{background:#111827}
+        body.dark .pubmed-footer a{background:#0b1324;border-color:#1f2937;color:#93c5fd}
+        body.dark .pubmed-footer a:hover{background:#111827}
+        /* Dark mode API docs code blocks */
+        body.dark pre{background:#0b1324;border-color:#1f2937;color:#e5e7eb}
+        body.dark code{color:#e5e7eb}
+        body.dark pre code{color:#e5e7eb}
+        /* Dark mode navbar blends into background */
+        body.dark nav { background-color: #0b1220; }
+        /* Dark mode IGV inversion trick */
+        body.dark #igv-container{background:#0b1324; filter: invert(0.92) hue-rotate(180deg)}
+        /* Loader spinner */
+        #loader{position:relative}
+        #loader:after{content:'';display:inline-block;width:1em;height:1em;margin-left:.5em;border:2px solid #cfd4dc;border-top-color:var(--primary);border-radius:50%;animation:spin 1s linear infinite;vertical-align:-2px}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        /* Dark background override */
+        body.dark{ background: linear-gradient(180deg,#0b1220 0%, #0a1020 100%); }
+        @media (max-width: 640px){ 
+            #assessment-form{grid-template-columns:1fr}
+            .container{padding:1em; margin-top:1em}
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <div class="links">
+            <a href="/">Tool</a>
+            <a href="/usage">Usage</a>
+            <a href="/about">About/Methods</a>
+            <a href="/cite">How to Cite</a>
+            <a href="/api_docs">API</a>
+        </div>
+        <button id="theme-toggle" class="theme-toggle" aria-pressed="false" title="Toggle dark mode">🌙</button>
+    </nav>
+    <script>
+        (function(){
+            const key = 'theme';
+            const btn = document.getElementById('theme-toggle');
+            function apply(t){
+                const dark = (t === 'dark');
+                document.body.classList.toggle('dark', dark);
+                if (btn) {
+                    btn.textContent = dark ? '☀️' : '🌙';
+                    btn.setAttribute('aria-pressed', String(dark));
+                }
+            }
+            let saved = localStorage.getItem(key);
+            if (!saved) saved = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            apply(saved);
+            // Handle hash for tab navigation on page load
+            if (window.location.hash) {
+                openTab(window.location.hash.substring(1));
+            }
+            btn && btn.addEventListener('click', () => {
+                const next = document.body.classList.contains('dark') ? 'light' : 'dark';
+                localStorage.setItem(key, next);
+                apply(next);
+            });
+        })();
+    </script>
+    <main class="container">
+        {% block content %}{% endblock %}
+        <p class="disclaimer">Disclaimer: This tool does not serve as Medical Advice. Although the content of these webpages may partly be provided by individuals in the medical profession, you acknowledge that provision of such content does not create a medical professional-patient relationship and does not constitute an opinion, medical advice, professional diagnosis, service  or treatment of any condition. The access to general information is provided for educational purposes only, through this site and links to other sites. The content is not recommended or endorsed by any doctor or healthcare provider. The information and content provided are not substitutes for medical or professional care, and the information is not to be used in place of a visit, call, consultation or the advice of  your physician or other healthcare  provider. You are liable or responsible for any advice, course of treatment, diagnosis or any other  information, services or product obtained through this site.</p>
+    </main>
+</body>
+</html>
+    

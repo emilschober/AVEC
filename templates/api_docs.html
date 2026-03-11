@@ -1,0 +1,68 @@
+
+{% extends "base.html" %}
+{% block content %}
+<h3>AVEC API Documentation</h3>
+<p>
+    The AVEC API provides programmatic access to the variant assessment tool. 
+    You can retrieve the same detailed analysis available through the web interface via a simple POST request.
+</p>
+
+<h4>Endpoint</h4>
+<p>The base URL for the API endpoint is:</p>
+<pre><code>{{ url_for('api_assess', _external=True) }}</code></pre>
+
+<h4>Request</h4>
+<p>The API accepts <strong>POST</strong> requests with a JSON body containing a single required key.</p>
+<ul>
+    <li><strong>Key:</strong> <code>query</code></li>
+    <li><strong>Description:</strong> The variant to assess in a recognized HGVS-like format.</li>
+    <li><strong>Examples:</strong> <code>NM_015427.4:c.1054G>A</code>, <code>FKTN c.1312G>A</code></li>
+</ul>
+
+<h4>Example Usage (cURL)</h4>
+<pre><code>curl -X POST "{{ url_for('api_assess', _external=True) }}"      -H "Content-Type: application/json"      -d '{"query": "NM_018026.4:c.607C>T"}'</code></pre>
+
+<h4>Response</h4>
+<p>The API returns a JSON object containing the full assessment, structured identically to the data used by the web interface.</p>
+<ul>
+    <li>On success (HTTP 200), the response will contain `summary` and `assessments` objects.</li>
+    <li>On failure (e.g., invalid query or server error), it will return a JSON object with an `error` key and an appropriate HTTP status code (400, 404, 500).</li>
+</ul>
+
+<h5>Example Successful Response Snippet</h5>
+<pre><code>{
+  "assessments": {
+    "Exon_Skipping": {
+      "checks": {
+        "Benign splice variant found": {
+          "original_passed": false,
+          "overridden": false,
+          "passed": false
+        },
+        "Is <10% of Protein": true,
+        "Is In-Frame": true,
+        ...
+      },
+      "classification": "Likely Eligible",
+      "domain_count": 0,
+      "frac_cds": "3.55%",
+      "reason": "Exon meets the primary criteria for a skippable exon."
+    }
+  },
+  "summary": {
+    "gene": "DMD",
+    "haploinsufficiency": {
+      "text": "No evidence",
+      "url": "https://search.clinicalgenome.org/kb/genes/HGNC:2928"
+    },
+    "moa": [],
+    "moi": [ "X-linked" ],
+    "transcript_id": "ENST00000357033.9"
+  },
+  "visualization": { ... }
+}</code></pre>
+
+<h4>Fair Use</h4>
+<p>This is a free and open research tool. Please limit requests to a reasonable rate to ensure service availability for all users. For very large batch jobs, we recommend using the file upload feature on the main page.</p>
+
+{% endblock %}
