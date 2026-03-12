@@ -732,7 +732,7 @@ function displayResults(data) {
 
         html += `<div class="strategy-block">
                 <div id="toggle-literature" class="result-header unable-to-assess accordion-toggle" style="cursor: pointer; user-select: none;">
-                    <h4>Literature: PubMed <span class="chevron">&#9662;</span></h4>
+                    <h4> PubMed <span class="chevron">&#9662;</span></h4>
                 </div>
                 <div id="content-literature" class="result-block" style="display: none;">
                     <div id="pubmed-results" data-query="${pubmedQuery}">Loading PubMed results...</div>
@@ -1132,7 +1132,7 @@ function displayResults(data) {
             const esResp = await fetch(esearchUrl);
             const esJson = await esResp.json();
             const ids = (esJson.esearchresult && esJson.esearchresult.idlist) || [];
-            if (!ids.length) { container.innerHTML = 'No PubMed results found.'; return; }
+            if (!ids.length) { container.innerHTML = 'No PubMed results can be displayed.'; return; }
             const esummaryUrl = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&retmode=json&id=' + ids.join(',');
             const sumResp = await fetch(esummaryUrl);
             const sumJson = await sumResp.json();
@@ -1173,7 +1173,7 @@ function displayResults(data) {
                 const esResp = await fetch(esearchUrl);
                 const esJson = await esResp.json();
                 const ids = (esJson.esearchresult && esJson.esearchresult.idlist) || [];
-                if (!ids.length) { container.innerHTML = 'No PubMed results found.'; continue; }
+                if (!ids.length) { container.innerHTML = 'No PubMed results can be displayed.'; continue; }
                 const esummaryUrl = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&retmode=json&id=' + ids.join(',');
                 const sumResp = await fetch(esummaryUrl);
                 const sumJson = await sumResp.json();
@@ -1303,3 +1303,4 @@ function downloadReport() {
 }
 </script>
 {% endblock %}
+
