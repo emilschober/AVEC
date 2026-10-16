@@ -1,0 +1,1571 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Tool - AVEC</title>
+    <script src="https://cdn.jsdelivr.net/npm/igv@2.15.5/dist/igv.min.js" integrity="sha384-ODTJrRAKVek3XddJWCIIVSUvxZAiuZAQq05z3zN7HbqOi9ZN6WV2bUd+jbcDAwwL" crossorigin="anonymous"></script>
+    <style>
+        body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;margin:0;background-color:#f8f9fa;color:#333}
+        .container{max-width:900px;margin:auto;background:var(--card);padding:2em;border-radius:8px;box-shadow:0 4px 8px rgba(0,0,0,.1); margin-top: 2em; margin-bottom: 2em;}
+        h3,h4,h5{color:#005a9c} a{color:#005a9c; text-decoration: none;} a:hover{text-decoration: underline;}
+        nav {background-color: #333; padding: 1em; text-align: center;}
+        nav a {color: white; margin: 0 15px; text-decoration: none; font-weight: bold;}
+        .disclaimer{font-size:.8em;color:#6c757d;margin-top:2em;text-align:center; padding-top: 1em; border-top: 1px solid #eee;}
+        form{display:grid;grid-template-columns:1fr;gap:1em;align-items:center;margin-bottom:2em}
+        input,button{padding:.75em;border-radius:4px;border:1px solid #ccc;font-size:1em;width:100%;box-sizing:border-box}
+        button{background-color:#007bff;color:white;font-weight:bold;cursor:pointer;border:none;width:auto;justify-self:end;padding:.75em 1.5em}
+        button:hover{background-color:#0056b3}
+        #loader{display:none;text-align:center;padding:1em;font-size:1.2em}
+        #results{display:none}.result-header{padding:1em;color:white;border-radius:4px 4px 0 0;margin-bottom:0;}.result-header h4{margin:0;font-size:1.5em;text-align:center;color:inherit;}
+        .result-block{border: 1px solid #ddd; border-top: none; padding: 1em; margin-bottom: 1.5em; border-radius: 0 0 4px 4px;}.result-block h5{margin-bottom:.5em;color:#495057;border-bottom:1px solid #eee;padding-bottom:.3em; margin-top: 0;}
+        .checklist{list-style-type:none;padding:0}.checklist li{margin-bottom:.5em}
+        .eligible{background-color:#28a745}.likely-eligible{background-color:#17a2b8}.unlikely-eligible{background-color:#ffc107;color:#333 !important;}.not-eligible{background-color:#dc3545}.unable-to-assess{background-color:#6c757d}.error{background-color:#dc3545}.note{font-style:italic;color:#555;font-size:.9em}
+        .strategy-block {margin-bottom: 2em;}
+        .summary-block { background-color: #e9ecef; padding: 1em; border-radius: 4px; margin-bottom: 2em; }
+        #igv-container { background: #fff; border: 1px solid #ddd; border-radius: 10px; overflow: auto; resize: vertical; min-height: 220px; margin-top: 2em; margin-bottom: 1.5em; }
+        #igv-container .igv-viewport { position: relative; }
+        .igv-track-resize-handle { position: absolute; left: 0; right: 0; bottom: 0; height: 6px; cursor: ns-resize; z-index: 40; background: transparent; }
+        .igv-track-resize-handle:hover, .igv-track-resize-handle.dragging { background: rgba(0,123,255,.35); }
+        /* Style for code blocks in API docs */
+        pre { background-color: #f0f0f0; border: 1px solid #ddd; border-radius: 4px; padding: 1em; white-space: pre-wrap; word-wrap: break-word; font-family: 'Courier New', Courier, monospace; }
+        /* PubMed results list */
+        .pubmed-list { list-style: none; margin: .5em 0 0 0; padding: 0; display: grid; gap: .75em; }
+        .pubmed-card { border: 1px solid var(--border); border-radius: 8px; padding: .75em .9em; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.03); }
+        .pubmed-title { font-weight: 600; margin: 0 0 .25em; color: #0f172a; }
+        .pubmed-meta { color: #555; font-size: 0.9em; }
+        .pubmed-card-footer { margin-top: .6em; text-align: right; }
+        .pubmed-article-link { display:inline-block; padding: .35em .6em; border: 1px solid var(--border); border-radius: 6px; text-decoration: none; color: #0c63bd; background:#f8fafc }
+        .pubmed-article-link:hover { background:#eef2f7 }
+        .pubmed-footer { margin-top: 1em; text-align: center; }
+        .pubmed-footer a { text-decoration: none; padding:.4em .75em; border-radius:6px; border:1px solid var(--border); color:#0c63bd; background:#fff }
+        .pubmed-footer a:hover { background:#f8fafc }
+        /* Domain list styling */
+        .domain-list { margin: .35em 0 0 0; padding-left: 1.1em; }
+        .domain-list li { margin: 0 0 .2em 0; }
+        /* PubMed accordion spacing */
+        .pubmed-accordion { margin-top: 1em; }
+        .pubmed-accordion .result-header, .pubmed-accordion .result-header h5 { color: #fff; }
+
+        /* Info icon for linking to methods */
+        .info-link { margin-left: 8px; color: inherit; text-decoration: none; font-size: 0.8em; opacity: 0.8; }
+        .info-link:hover { opacity: 1; }
+
+        /* Beauty overrides and enhancements */
+        :root{--primary:#0d6efd;--primary-dark:#0b5ed7;--text:#333;--muted:#6c757d;--bg:#f7f8fb;--card:#ffffff;--border:#e6e9ef;--ok:#28a745;--info:#17a2b8;--warn:#ffc107;--bad:#dc3545;--neutral:#6c757d}
+        body{background:linear-gradient(180deg,#f8fafc 0%,#eef2f7 100%)}
+        .container{max-width:980px;border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,.08)}
+        nav{background:#222;box-shadow:0 2px 6px rgba(0,0,0,.15);padding:.85em 1em}
+        nav{position:relative;display:flex;align-items:center;justify-content:center}
+        nav .logo{position:absolute;left:1rem;top:50%;transform:translateY(-50%);display:flex;align-items:center}
+        nav .logo img{height:40px;width:auto;filter:brightness(0) invert(1)}
+        nav .links{display:flex;align-items:center;gap:12px}
+        nav .links a{opacity:.9;font-weight:600;margin:0 12px;color:#f3f3f3;text-decoration:none}
+        nav .links a:hover{opacity:1}
+        .theme-toggle{position:absolute;right:1rem;top:50%;transform:translateY(-50%);background:transparent;border:1px solid var(--border);color:#f3f3f3;border-radius:999px;padding:.35em .7em;cursor:pointer}
+        .theme-toggle:hover{background:rgba(255,255,255,.06)}
+        .disclaimer{font-size:.85em;border-top:1px solid var(--border)}
+        #assessment-form{grid-template-columns:120px 1fr auto}
+        #assessment-form label{margin:0;font-weight:600;color:#495057}
+        input,button{border-radius:6px;border:1px solid #cfd4dc}
+        button{background:var(--primary);box-shadow:0 2px 8px rgba(13,110,253,.25)}
+        button:hover{background:var(--primary-dark)}
+        .result-header{border-radius:10px 10px 0 0}
+        .result-header h4{font-size:1.2em;letter-spacing:.2px}
+        .accordion-toggle .chevron{display:inline-block;margin-left:.4em;transition:transform .2s ease}
+        .accordion-toggle.open .chevron{transform:rotate(180deg)}
+        /* Rounded corners when collapsed; squared bottom when open */
+        .accordion-toggle{border-radius:10px}
+        .accordion-toggle.open{border-radius:10px 10px 0 0}
+        .result-block{border:1px solid var(--border);border-top:none;border-radius:0 0 10px 10px;box-shadow:0 8px 18px rgba(0,0,0,.04)}
+        .result-block h5{color:#334155;border-bottom:1px solid var(--border)}
+        .summary-block{background:#eef2f7;border:1px solid var(--border);border-radius:10px}
+        .summary-block ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.6em 1em}
+        .summary-block li{background:#fff;border:1px solid var(--border);padding:.5em .75em;border-radius:8px}
+        /* Checklist visual polish: colorblind-friendly checkbox icons instead of color-coding */
+        .checklist{margin:0}
+        .checklist li{padding:.5em .75em;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text)}
+        .checklist li.pass::before{content:'\2611';display:inline-block;width:1.25em;text-align:center;font-weight:700;margin-right:.4em;color:#000}
+        .checklist li.fail::before{content:'\2610';display:inline-block;width:1.25em;text-align:center;font-weight:700;margin-right:.4em;color:#000}
+        .checklist li .ic{display:inline-block;width:1.25em;text-align:center;font-weight:700;margin-right:.4em}
+        /* Override checklist for interactive mode */
+        .checklist.interactive li { cursor: pointer; user-select: none; transition: background-color 0.1s ease, border-color 0.1s ease; position: relative; }
+        .checklist.interactive li:hover { background-color: #e9ecef; }
+        .checklist.interactive li:hover::after { content: 'click for manual override'; position: absolute; right: 10px; font-size: 0.85em; color: var(--muted); font-style: italic; }
+        body.dark .checklist.interactive li:hover { background-color: #2c2c2c; }
+        .override-controls { text-align: center; }
+
+        /* Chips and controls */
+        .chip{display:inline-block;padding:.15em .5em;border-radius:999px;font-size:.8em;border:1px solid var(--border);background:#fff;color:#334155;margin-left:.5em}
+        .chip-ok{background:#ecfdf3;border-color:#bbf7d0;color:#166534}
+        .chip-warn{background:#fffbeb;border-color:#fde68a;color:#92400e}
+        .expand-controls{display:flex;gap:.5em;justify-content:flex-end;margin: .25em 0 1em}
+        .expand-controls .secondary{background:#fff;color:#334155;border:1px solid var(--border);padding:.4em .8em;border-radius:6px;cursor:pointer}
+        .expand-controls .secondary:hover{background:#f8fafc}
+        .section-block{border:1px solid var(--border);border-radius:10px;padding:1em;margin-bottom:2em;background:var(--card)}
+        .section-header-row{display:flex;align-items:center;justify-content:space-between;gap:1em;margin:0 0 .75em}
+        .section-header-row h4{margin:0}
+        .section-header-row .expand-controls{margin:0}
+        /* Compact status chip for headers */
+        .chip-status{display:inline-block;padding:.15em .55em;border-radius:999px;font-size:.82em;border:1px solid var(--border);font-weight:600;margin-left:.5em}
+        .status-eligible{background:#14532d;color:#e6faef;border-color:#14532d}
+        .status-likely-eligible{background:#0f4c5c;color:#e7f6fb;border-color:#0e7490}
+        .status-unlikely-eligible{background:#fef3c7;color:#7c2d12;border-color:#f59e0b}
+        .status-not-eligible{background:#7f1d1d;color:#fee2e2;border-color:#991b1b}
+        .status-unable-to-assess{background:#334155;color:#e2e8f0;border-color:#334155}
+        .status-error{background:#991b1b;color:#fee2e2;border-color:#991b1b}
+        .status-under-development{background:#334155;color:#e2e8f0;border-color:#334155}
+        .status-informational{background:#334155;color:#e2e8f0;border-color:#334155}
+        /* Professional-looking header colors */
+        .eligible{background:linear-gradient(135deg,#15803d,#22c55e); color:#fff}
+        .likely-eligible{background:linear-gradient(135deg,#0ea5e9,#06b6d4); color:#fff}
+        .unlikely-eligible{background:linear-gradient(135deg,#f59e0b,#fbbf24); color:#111827}
+        .not-eligible{background:linear-gradient(135deg,#dc2626,#ef4444); color:#fff}
+        .unable-to-assess{background:linear-gradient(135deg,#64748b,#94a3b8); color:#fff}
+        .error{background:linear-gradient(135deg,#b91c1c,#ef4444); color:#fff}
+        .under-development{background:linear-gradient(135deg,#64748b,#94a3b8); color:#fff}
+        .informational{background:linear-gradient(135deg,#64748b,#94a3b8); color:#fff}
+        /* Dark mode overrides */
+        body.dark{--bg:#111111;--card:#1b1b1b;--text:#e5e7eb;--muted:#a3a3a3;--border:#333333;--primary:#60a5fa;--primary-dark:#3b82f6}
+        body.dark{color:var(--text)}
+        body.dark a{color:#93c5fd}
+        body.dark nav .links a, body.dark .theme-toggle{color:#e5e7eb}
+        body.dark .container{box-shadow:0 6px 18px rgba(0,0,0,.5)}
+        body.dark .summary-block{background:#202020;border-color:#333333}
+        body.dark .summary-block li{background:#161616;border-color:#333333;color:var(--text)}
+        body.dark .result-block{border-color:#333333;background:#161616;box-shadow:0 8px 18px rgba(0,0,0,.5)}
+        /* Dark mode form controls */
+        body.dark input, body.dark select, body.dark textarea{background:#161616;border:1px solid #333333;color:var(--text)}
+        /* IGV's own inputs/selects (locus search, chromosome picker) stay in light theme */
+        body.dark #igv-container input, body.dark #igv-container select, body.dark #igv-container textarea{background:#fff;border:1px solid #ccc;color:#333}
+        body.dark .expand-controls .secondary{background:#161616;color:#e5e7eb;border:1px solid #333333}
+        body.dark .expand-controls .secondary:hover{background:#202020}
+        /* Dark mode checklist: neutral surface (from --card/--border/--text), white checkbox icons */
+        body.dark .checklist li.pass::before, body.dark .checklist li.fail::before{color:#fff}
+        /* Dark mode PubMed cards */
+        body.dark .pubmed-card{background:#161616;border-color:#333333}
+        body.dark .pubmed-title{color:#e5e7eb}
+        body.dark .pubmed-article-link{background:#161616;border-color:#333333;color:#93c5fd}
+        body.dark .pubmed-article-link:hover{background:#202020}
+        body.dark .pubmed-footer a{background:#161616;border-color:#333333;color:#93c5fd}
+        body.dark .pubmed-footer a:hover{background:#202020}
+        /* Dark mode API docs code blocks */
+        body.dark pre{background:#161616;border-color:#333333;color:#e5e7eb}
+        body.dark code{color:#e5e7eb}
+        body.dark pre code{color:#e5e7eb}
+        /* Dark mode navbar blends into background */
+        body.dark nav { background-color: #111111; }
+        /* IGV widget keeps its native light theme even in dark mode */
+        /* Loader spinner */
+        #loader{position:relative}
+        #loader:after{content:'';display:inline-block;width:1em;height:1em;margin-left:.5em;border:2px solid #cfd4dc;border-top-color:var(--primary);border-radius:50%;animation:spin 1s linear infinite;vertical-align:-2px}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        /* Dark background override */
+        body.dark{ background: linear-gradient(180deg,#111111 0%, #0c0c0c 100%); }
+        @media (max-width: 640px){ 
+            #assessment-form{grid-template-columns:1fr}
+            .container{padding:1em; margin-top:1em}
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <div class="logo">
+            <img src="/static/ukk_logo.png" alt="Universität zu Köln">
+        </div>
+        <div class="links">
+            <a href="/">Tool</a>
+            <a href="/usage">Usage</a>
+            <a href="/about">About/Methods</a>
+            <a href="/cite">How to Cite</a>
+            <a href="/api_docs">API</a>
+        </div>
+        <button id="theme-toggle" class="theme-toggle" aria-pressed="false" title="Toggle dark mode">🌙</button>
+    </nav>
+    <script>
+        (function(){
+            const key = 'theme';
+            const btn = document.getElementById('theme-toggle');
+            function apply(t){
+                const dark = (t === 'dark');
+                document.body.classList.toggle('dark', dark);
+                if (btn) {
+                    btn.textContent = dark ? '☀️' : '🌙';
+                    btn.setAttribute('aria-pressed', String(dark));
+                }
+            }
+            let saved = localStorage.getItem(key);
+            if (!saved) saved = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            apply(saved);
+            btn && btn.addEventListener('click', () => {
+                const next = document.body.classList.contains('dark') ? 'light' : 'dark';
+                localStorage.setItem(key, next);
+                apply(next);
+            });
+        })();
+    </script>
+    <main class="container">
+<style>
+    .splice-prompt-buttons { 
+        margin-top: 1em; 
+        display: flex; 
+        gap: 10px; 
+    }
+    .splice-prompt-buttons button {
+        flex: 1;
+        color:white;
+        font-weight:bold;
+        cursor:pointer; 
+        border:none; 
+        width:auto;
+        padding:.75em 1.5em; 
+        border-radius: 4px; 
+        font-size: 0.9em;
+    }
+    .splice-prompt-buttons button.yes-btn { background-color: #28a745; }
+    .splice-prompt-buttons button.yes-btn:hover { background-color: #218838; }
+    .splice-prompt-buttons button.no-btn { background-color: #dc3545; }
+    .splice-prompt-buttons button.no-btn:hover { background-color: #c82333; }
+    .splice-prompt-buttons button.neutral-btn { background-color: #6c757d; }
+    .splice-prompt-buttons button.neutral-btn:hover { background-color: #5a6268; }
+
+    .warning { color: #dc3545; font-weight: 600; }
+</style>
+
+<h3>AVEC: Advanced Variant Eligibility Calculator</h3>
+<p>Enter a variant to assess its eligibility for ASO therapy. We strongly recommend to first <strong>search for already existing ASOs </strong>before using AVEC.</p>
+<p class="warning" style="color: var(--text);">Results depend on underlying data sources and external services and may be incomplete or unavailable. This tool does not replace clinical judgement or a physician.</p>
+<form id="assessment-form"> <label for="query">Variant:</label> <input id="query" required maxlength="200" placeholder="e.g., NM_015427.4:c.1054G>A"> <button type="submit">Assess</button> </form>
+<div id="loader">Assessing...</div>
+<div id="results"></div>
+
+<script>
+// Escapes text from third-party sources (PubMed, TReXome, registries) before it goes into HTML
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+// NCBI E-utilities allow 3 requests/s per IP without an API key, and the literature boxes fire
+// several searches per result; queue them ~400 ms apart (rate-limited replies also lack CORS
+// headers, so the browser would report them as network errors)
+let ncbiQueue = Promise.resolve();
+function ncbiFetchJson(url) {
+    const result = ncbiQueue.then(async () => {
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error(`NCBI E-utilities HTTP ${resp.status}`);
+        return resp.json();
+    });
+    ncbiQueue = result.catch(() => {}).then(() => new Promise(resolve => setTimeout(resolve, 400)));
+    return result;
+}
+
+// --- Session Management Helpers ---
+function saveSession(data, query, spliceInput, moaInput, commentary, esOverrides, kdOverrides, wtOverrides, moiOverride, ssOverrides) {
+    if (data) sessionStorage.setItem('avec_data', JSON.stringify(data));
+    if (query) sessionStorage.setItem('avec_query', query);
+    if (spliceInput !== undefined) sessionStorage.setItem('avec_splice', spliceInput || '');
+    if (moaInput !== undefined) sessionStorage.setItem('avec_moa', moaInput || '');
+    if (commentary !== undefined) sessionStorage.setItem('avec_commentary', commentary || '');
+    if (esOverrides !== undefined) sessionStorage.setItem('avec_es_overrides', JSON.stringify(esOverrides));
+    if (kdOverrides !== undefined) sessionStorage.setItem('avec_kd_overrides', JSON.stringify(kdOverrides));
+    if (wtOverrides !== undefined) sessionStorage.setItem('avec_wt_overrides', JSON.stringify(wtOverrides));
+    if (moiOverride !== undefined) sessionStorage.setItem('avec_moi_override', JSON.stringify(moiOverride));
+    if (ssOverrides !== undefined) sessionStorage.setItem('avec_ss_overrides', JSON.stringify(ssOverrides));
+}
+
+function clearSessionUserInputs() {
+    sessionStorage.removeItem('avec_splice');
+    sessionStorage.removeItem('avec_moa');
+    sessionStorage.removeItem('avec_commentary');
+    sessionStorage.removeItem('avec_es_overrides');
+    sessionStorage.removeItem('avec_kd_overrides');
+    sessionStorage.removeItem('avec_wt_overrides');
+    sessionStorage.removeItem('avec_moi_override');
+    sessionStorage.removeItem('avec_ss_overrides');
+    sessionStorage.removeItem('avec_data'); // Clear old data on new submit
+}
+
+// Restore session on load
+window.addEventListener('DOMContentLoaded', () => {
+    const savedQuery = sessionStorage.getItem('avec_query');
+    const savedData = sessionStorage.getItem('avec_data');
+    const savedSplice = sessionStorage.getItem('avec_splice');
+    const savedMoa = sessionStorage.getItem('avec_moa');
+    const savedCommentary = sessionStorage.getItem('avec_commentary');
+    const savedEsOverrides = sessionStorage.getItem('avec_es_overrides');
+    const savedKdOverrides = sessionStorage.getItem('avec_kd_overrides');
+    const savedWtOverrides = sessionStorage.getItem('avec_wt_overrides');
+    const savedMoiOverride = sessionStorage.getItem('avec_moi_override');
+    const savedSsOverrides = sessionStorage.getItem('avec_ss_overrides');
+
+    if (savedQuery) {
+        document.getElementById('query').value = savedQuery;
+    }
+
+    // Restore global state
+    if (savedSplice) window.userSpliceInput = savedSplice;
+    if (savedMoa) window.userMoaInput = savedMoa;
+    if (savedCommentary) window.userCommentary = savedCommentary;
+    if (savedEsOverrides) window.userEsOverrides = JSON.parse(savedEsOverrides);
+    if (savedKdOverrides) window.userKdOverrides = JSON.parse(savedKdOverrides);
+    if (savedWtOverrides) window.userWtOverrides = JSON.parse(savedWtOverrides);
+    if (savedMoiOverride) window.userMoiOverride = JSON.parse(savedMoiOverride);
+    if (savedSsOverrides) window.userSsOverrides = JSON.parse(savedSsOverrides);
+
+    if (savedData) {
+        try {
+            const data = JSON.parse(savedData);
+            displayResults(data);
+        } catch (e) {
+            console.error("Failed to restore session data", e);
+        }
+    }
+});
+
+// --- Helper to consolidate summary notes ---
+function appendUserNotes(data) {
+    if (!data.summary) return;
+    let notes = [];
+    if (data.summary.note) notes.push(data.summary.note);
+    
+    if (window.userMoaInput) {
+        notes.push(`User pathomechanism selection: ${window.userMoaInput}`);
+    }
+    
+    if (window.userMoiOverride && window.userMoiOverride.moi && window.userMoiOverride.moi.length > 0) {
+        const m = window.userMoiOverride.moi[0];
+        let choice = '';
+        if (m.includes('Autosomal dominant')) choice = 'AD';
+        else if (m.includes('Autosomal recessive')) choice = 'AR';
+        else if (m.includes('X-linked dominant')) choice = 'XD';
+        else if (m.includes('X-linked recessive')) choice = 'XR';
+        if (choice) notes.push(`User MOI override to: ${choice}.`);
+    }
+    
+    if (notes.length > 0) data.summary.note = [...new Set(notes)].join('<br>');
+}
+
+// Persist user selections across reassessments within the page lifecycle
+window.userSpliceInput = null; // 'yes' | 'no' | null
+window.userCommentary = '';
+window.userMoaInput = null;    // 'GoF' | 'LoF' | 'DN'
+window.userMoiOverride = null;
+window.userEsOverrides = {};   // For Exon Skipping
+window.userKdOverrides = {};   // For Knockdown
+window.userWtOverrides = {};   // For WT Upregulation
+window.userSsOverrides = {};   // For Splice Switching
+
+// Toggle between the user's input transcript and the MANE Select/canonical alternative,
+// both of which are computed server-side in a single /assess response. Swapping is purely
+// client-side and symmetric, so clicking again reverts.
+window.toggleTranscriptView = function() {
+    const data = window.lastAssessData;
+    if (!data || !data.transcript_info || !data.transcript_info.available_alternate || !data.alternative_result) return;
+    const alt = data.alternative_result;
+    const swapped = {
+        ...data,
+        summary: alt.summary,
+        assessments: alt.assessments,
+        classification: alt.classification,
+        reason: alt.reason,
+        visualization: alt.visualization,
+        alternative_result: {
+            summary: data.summary,
+            assessments: data.assessments,
+            classification: data.classification,
+            reason: data.reason,
+            visualization: data.visualization
+        },
+        transcript_info: { ...data.transcript_info, selected: data.transcript_info.selected === 'input' ? 'default' : 'input' }
+    };
+    displayResults(swapped);
+};
+
+document.getElementById('assessment-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const resultsDiv = document.getElementById('results');
+    const loader = document.getElementById('loader');
+    const queryVal = document.getElementById('query').value;
+    
+    resultsDiv.style.display = 'none';
+    resultsDiv.innerHTML = '';
+    loader.style.display = 'block';
+    
+    //query: reset stored user inputs and session storage for inputs
+    window.userSpliceInput = null;
+    window.userMoaInput = null;
+    window.userMoiOverride = null;
+    window.userCommentary = '';
+    window.userEsOverrides = {};
+    window.userKdOverrides = {};
+    window.userWtOverrides = {};
+    window.userSsOverrides = {};
+    clearSessionUserInputs();
+    
+    // Initial assessment payload contains only the query
+    const payload = { 
+        query: queryVal 
+        // splice_user_input is omitted, so backend defaults to DB check
+    }; 
+    
+    try {
+        const response = await fetch('/assess', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        const data = await response.json();
+        
+        // Save to session
+        saveSession(data, queryVal, null, null, '', {}, {}, {}, null, {});
+        
+        displayResults(data);
+    } catch (error) {
+        console.error("Fetch Error:", error);
+        displayResults({ classification: "Error", reason: "Could not connect to the server." });
+    } finally {
+        loader.style.display = 'none';
+    }
+});
+
+
+// Adds a draggable resize handle to the bottom of every track's viewport so
+// individual IGV tracks can be expanded/collapsed vertically by the user.
+function installTrackResizeHandles(browser) {
+    if (!browser || !browser.trackViews) return;
+    for (const trackView of browser.trackViews) {
+        if (!trackView.viewports) continue;
+        for (const viewport of trackView.viewports) {
+            const vpDiv = viewport.$viewport ? viewport.$viewport.get(0) : null;
+            if (!vpDiv || vpDiv.querySelector('.igv-track-resize-handle')) continue;
+
+            const handle = document.createElement('div');
+            handle.className = 'igv-track-resize-handle';
+            vpDiv.appendChild(handle);
+
+            let startY = 0;
+            let startHeight = 0;
+
+            const onMouseMove = (e) => {
+                const newHeight = Math.max(20, startHeight + (e.clientY - startY));
+                trackView.track.autoHeight = false;
+                trackView.setTrackHeight(newHeight, true);
+            };
+            const onMouseUp = () => {
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+                handle.classList.remove('dragging');
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+            };
+            handle.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                startY = e.clientY;
+                startHeight = trackView.track.height;
+                handle.classList.add('dragging');
+                document.body.style.cursor = 'ns-resize';
+                document.body.style.userSelect = 'none';
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('mouseup', onMouseUp);
+            });
+        }
+    }
+}
+
+function renderIGV(containerId, data) {
+    const container = document.getElementById(containerId);
+    if (!container || !data || !data.locus) {
+        console.error("IGV container or data is missing, cannot render viewer.");
+        return;
+    }
+
+    container.style.display = 'block';
+    container.innerHTML = '';
+    const options = { genome: "hg38", locus: data.locus };
+
+    igv.createBrowser(container, options)
+        .then(function (browser) {
+            installTrackResizeHandles(browser);
+            const tracksToLoad = [];
+            if (data.variantTrack && data.variantTrack.features) {
+                tracksToLoad.push({ type: "annotation", name: data.variantTrack.name, features: data.variantTrack.features, color: "red", displayMode: "EXPANDED", height: 35 });
+            }
+            if (data.domainTrack && data.domainTrack.features) {
+                tracksToLoad.push({ type: "annotation", name: data.domainTrack.name, features: data.domainTrack.features, color: "#D46A6A", displayMode: "EXPANDED", height: 35 });
+            }
+            if (tracksToLoad.length > 0) {
+                browser.loadTrackList(tracksToLoad).then(() => installTrackResizeHandles(browser));
+            }
+        });
+}
+// --- HELPER FUNCTION FOR SPLICE VALIDATION ---
+async function reassessWithSpliceInput(spliceInput) {
+    const resultsDiv = document.getElementById('results');
+    const loader = document.getElementById('loader');
+    const queryVal = document.getElementById('query').value;
+    
+    resultsDiv.style.display = 'none';
+    resultsDiv.innerHTML = '';
+    loader.style.display = 'block';
+
+    // Create the payload with the 'splice_user_input' flag
+    const payload = {
+        query: queryVal,
+        splice_user_input: spliceInput, // 'yes' or 'no'
+        // include previously chosen MoA if available to avoid losing state
+        moa_user_input: window.userMoaInput,
+        splice_switching_overrides: window.userSsOverrides
+    };
+
+    try {
+        const response = await fetch('/assess', { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify(payload) 
+        });
+        const data = await response.json();
+
+        // Add a note to the re-assessed data so the user knows what happened
+        if (data.assessments && data.assessments.Splice_Switching) {
+            const originalReason = data.assessments.Splice_Switching.reason || "";
+            let prefix = (spliceInput === 'yes') ? 
+                "<strong>Re-assessed based on user-provided 'Yes'.</strong>" : 
+                "<strong>Re-assessed based on user-provided 'No'.</strong>";
+            data.assessments.Splice_Switching.reason = `${prefix} ${originalReason}`;
+        }
+        // persist the user's splice selection
+        window.userSpliceInput = spliceInput;
+        
+        appendUserNotes(data);
+        // Save session state
+        saveSession(data, queryVal, spliceInput, window.userMoaInput,
+            document.getElementById('user-commentary')?.value,
+            window.userEsOverrides, window.userKdOverrides, window.userWtOverrides,
+            window.userMoiOverride, window.userSsOverrides
+        );
+
+        displayResults(data);
+    } catch (error) {
+        console.error("Fetch Error:", error);
+        displayResults({ classification: "Error", reason: "Could not connect to the server." });
+    } finally {
+        loader.style.display = 'none';
+    }
+}
+
+// --- HELPER FUNCTION FOR MoA SELECTION ---
+async function reassessWithMoaInput(moaChoice) {
+    const resultsDiv = document.getElementById('results');
+    const loader = document.getElementById('loader');
+    const queryVal = document.getElementById('query').value;
+    
+    resultsDiv.style.display = 'none';
+    resultsDiv.innerHTML = '';
+    loader.style.display = 'block';
+
+    const payload = {
+        query: queryVal,
+        moa_user_input: moaChoice, // 'GoF' or 'LoF'
+        splice_user_input: window.userSpliceInput,
+        exon_skipping_overrides: window.userEsOverrides,
+        knockdown_overrides: window.userKdOverrides,
+        wt_upregulation_overrides: window.userWtOverrides,
+        splice_switching_overrides: window.userSsOverrides,
+        gene_characteristics_overrides: window.userMoiOverride
+    };
+
+    try {
+        const response = await fetch('/assess', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await response.json();
+
+        // persist the user's MoA selection
+        window.userMoaInput = moaChoice;
+        
+        appendUserNotes(data);
+        // Save session state
+        saveSession(data, queryVal, window.userSpliceInput, moaChoice,
+            document.getElementById('user-commentary')?.value,
+            window.userEsOverrides, window.userKdOverrides, window.userWtOverrides,
+            window.userMoiOverride, window.userSsOverrides
+        );
+
+        displayResults(data);
+    } catch (error) {
+        console.error('Fetch Error:', error);
+        displayResults({ classification: 'Error', reason: 'Could not connect to the server.' });
+    } finally {
+        loader.style.display = 'none';
+    }
+}
+
+// --- HELPER FUNCTION FOR MOI OVERRIDE ---
+async function reassessWithMoiOverride(moiChoice) {
+    const resultsDiv = document.getElementById('results');
+    const loader = document.getElementById('loader');
+    const queryVal = document.getElementById('query').value;
+    
+    resultsDiv.style.display = 'none';
+    resultsDiv.innerHTML = '';
+    loader.style.display = 'block';
+
+    // The backend expects a list of full strings
+    const moiMap = {
+        'AD': ['Autosomal dominant inheritance'],
+        'AR': ['Autosomal recessive inheritance'],
+        'XD': ['X-linked dominant inheritance'],
+        'XR': ['X-linked recessive inheritance']
+    };
+    const moiPayload = moiMap[moiChoice] || [];
+
+    // Update global state
+    window.userMoiOverride = { moi: moiPayload };
+
+    const payload = {
+        query: queryVal,
+        moa_user_input: window.userMoaInput,
+        splice_user_input: window.userSpliceInput,
+        exon_skipping_overrides: window.userEsOverrides,
+        knockdown_overrides: window.userKdOverrides,
+        wt_upregulation_overrides: window.userWtOverrides,
+        splice_switching_overrides: window.userSsOverrides,
+        gene_characteristics_overrides: window.userMoiOverride
+    };
+
+    try {
+        const response = await fetch('/assess', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await response.json();
+        
+        appendUserNotes(data);
+        saveSession(data, queryVal, window.userSpliceInput, window.userMoaInput, window.userCommentary, window.userEsOverrides, window.userKdOverrides, window.userWtOverrides, window.userMoiOverride, window.userSsOverrides);
+        displayResults(data);
+    } catch (error) {
+        console.error('Fetch Error:', error);
+    } finally {
+        loader.style.display = 'none';
+    }
+}
+
+// --- HELPER FUNCTION FOR GUIDELINE OVERRIDES ---
+async function reassessWithGuidelineOverrides(strategy, overrides) {
+    const resultsDiv = document.getElementById('results');
+    const loader = document.getElementById('loader');
+    const queryVal = document.getElementById('query').value;
+
+    resultsDiv.style.display = 'none';
+    resultsDiv.innerHTML = '';
+    loader.style.display = 'block';
+
+    // Update global state
+    if (strategy === 'Exon_Skipping') window.userEsOverrides = overrides;
+    if (strategy === 'Knockdown') window.userKdOverrides = overrides;
+    if (strategy === 'WT_Upregulation') window.userWtOverrides = overrides;
+    if (strategy === 'Splice_Switching') window.userSsOverrides = overrides;
+
+    const payload = {
+        query: queryVal,
+        moa_user_input: window.userMoaInput,
+        splice_user_input: window.userSpliceInput,
+        exon_skipping_overrides: window.userEsOverrides,
+        knockdown_overrides: window.userKdOverrides,
+        wt_upregulation_overrides: window.userWtOverrides,
+        splice_switching_overrides: window.userSsOverrides,
+        gene_characteristics_overrides: window.userMoiOverride
+    };
+
+    try {
+        const response = await fetch('/assess', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        const data = await response.json();
+        appendUserNotes(data);
+        saveSession(data, queryVal, window.userSpliceInput, window.userMoaInput, window.userCommentary, window.userEsOverrides, window.userKdOverrides, window.userWtOverrides, window.userMoiOverride, window.userSsOverrides);
+        displayResults(data);
+    } catch (error) {
+        console.error('Fetch Error:', error);
+    } finally {
+        loader.style.display = 'none';
+    }
+}
+
+// --- HELPER FOR EXONIC PATHOGENICITY ---
+async function reassessWithExonicPathogenicityInput(pathogenicityChoice) {
+    const resultsDiv = document.getElementById('results');
+    const loader = document.getElementById('loader');
+    const queryVal = document.getElementById('query').value;
+
+    resultsDiv.style.display = 'none';
+    resultsDiv.innerHTML = '';
+    loader.style.display = 'block';
+
+    const payload = {
+        query: queryVal,
+        exonic_pathogenic_user_input: pathogenicityChoice, // 'yes' or 'no'
+        // Persist other user choices
+        splice_user_input: window.userSpliceInput,
+        moa_user_input: window.userMoaInput,
+        exon_skipping_overrides: window.userEsOverrides,
+        knockdown_overrides: window.userKdOverrides,
+        wt_upregulation_overrides: window.userWtOverrides,
+        splice_switching_overrides: window.userSsOverrides,
+        gene_characteristics_overrides: window.userMoiOverride
+    };
+
+    try {
+        const response = await fetch('/assess', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await response.json();
+
+        // Save session and display
+        appendUserNotes(data);
+        saveSession(data, queryVal, window.userSpliceInput, window.userMoaInput, window.userCommentary, window.userEsOverrides, window.userKdOverrides, window.userWtOverrides, window.userMoiOverride, window.userSsOverrides);
+        displayResults(data);
+    } catch (error) {
+        console.error('Fetch Error:', error);
+        displayResults({ classification: 'Error', reason: 'Could not connect to the server.' });
+    } finally {
+        loader.style.display = 'none';
+    }
+}
+
+// --- EVENT LISTENER (for 'results' div) ---
+document.getElementById('results').addEventListener('click', async function(e) {
+    // Check if the "Yes" button was clicked
+    if (e.target && e.target.id === 'splice-validation-yes') {
+        e.preventDefault();
+        reassessWithSpliceInput('yes');
+    }
+    
+    // Check if the "No" button was clicked
+    if (e.target && e.target.id === 'splice-validation-no') {
+        e.preventDefault();
+        reassessWithSpliceInput('no');
+    }
+    // MoA selection buttons
+    if (e.target && e.target.id === 'moa-choice-gof') {
+        e.preventDefault();
+        reassessWithMoaInput('GoF');
+    }
+    if (e.target && e.target.id === 'moa-choice-lof') {
+        e.preventDefault();
+        reassessWithMoaInput('LoF');
+    }
+    if (e.target && e.target.id === 'moa-choice-dn') {
+        e.preventDefault();
+        reassessWithMoaInput('DN');
+    }
+    // ---  MOI Override Buttons ---
+    if (e.target && e.target.id === 'moi-choice-ad') {
+        e.preventDefault();
+        reassessWithMoiOverride('AD');
+    }
+    if (e.target && e.target.id === 'moi-choice-ar') {
+        e.preventDefault();
+        reassessWithMoiOverride('AR');
+    }
+    if (e.target && e.target.id === 'moi-choice-xd') {
+        e.preventDefault();
+        reassessWithMoiOverride('XD');
+    }
+    if (e.target && e.target.id === 'moi-choice-xr') {
+        e.preventDefault();
+        reassessWithMoiOverride('XR');
+    }
+    // ---  Exonic Pathogenicity Buttons ---
+    if (e.target && e.target.id === 'exonic-pathogenicity-yes') {
+        e.preventDefault();
+        reassessWithExonicPathogenicityInput('yes');
+    }
+    if (e.target && e.target.id === 'exonic-pathogenicity-no') {
+        e.preventDefault();
+        reassessWithExonicPathogenicityInput('no');
+    }
+    // --- Download Report Button ---
+    if (e.target && e.target.id === 'download-report-btn') {
+        e.preventDefault();
+        downloadReport();
+    }
+    // --- Commit Overrides Button ---
+    if (e.target && e.target.classList.contains('commit-overrides-btn')) {
+        e.preventDefault();
+        const strategy = e.target.dataset.strategy;
+        const form = document.getElementById(`override-form-${e.target.dataset.formId}`);
+        if (!form) return;
+
+        // Keep the strategy's existing overrides (e.g. those committed on another exon-skipping
+        // option) and record only checks whose state now differs from the automatic result
+        const existing = {
+            Exon_Skipping: window.userEsOverrides,
+            Knockdown: window.userKdOverrides,
+            WT_Upregulation: window.userWtOverrides,
+            Splice_Switching: window.userSsOverrides
+        }[strategy] || {};
+        const overrides = { ...existing };
+        form.querySelectorAll('li[data-check-name]').forEach(li => {
+            const checkName = li.dataset.checkName;
+            const isPassed = li.classList.contains('pass');
+            if (String(isPassed) === li.dataset.originalPassed) delete overrides[checkName];
+            else overrides[checkName] = isPassed;
+        });
+
+        reassessWithGuidelineOverrides(strategy, overrides);
+    }
+    // --- Interactive Guideline Checklist Item ---
+    if (e.target && e.target.closest('.checklist.interactive li')) {
+        e.preventDefault();
+        const li = e.target.closest('li');
+
+        // Toggle pass/fail state
+        const isCurrentlyPass = li.classList.contains('pass');
+        li.classList.toggle('pass', !isCurrentlyPass);
+        li.classList.toggle('fail', isCurrentlyPass);
+
+        // Show this option's commit button
+        const form = li.closest('.override-form');
+        const commitBtnContainer = form && document.getElementById(form.id.replace('override-form-', 'override-controls-'));
+        if (commitBtnContainer) {
+            commitBtnContainer.style.display = 'block';
+        }
+    }
+});
+
+
+// --- displayResults ---
+function displayResults(data) {
+    window.lastAssessData = data;
+    const resultsDiv = document.getElementById('results');
+    resultsDiv.style.display = 'block';
+    resultsDiv.innerHTML = '';
+
+    if (!data || data.classification === "Error" || data.classification === "Unable to Assess") {
+        const classificationClass = (data.classification || "Error").toLowerCase().replace(/ /g, '-');
+        resultsDiv.innerHTML = `<div class="result-header ${classificationClass}"><h4>${data.classification || "Error"}</h4></div><div class="result-block"><p>${data.reason || "An unknown error occurred."}</p></div>`;
+        return;
+    }
+
+    let html = '';
+
+    // Precompute MoA-related values for use across sections
+    const assessmentsObj = data.assessments || {};
+    const summaryObj = data.summary || {};
+    const resolvedMoa = summaryObj.resolved_moa || window.userMoaInput || null;
+    // Only an established N1C registry ASO still short-circuits the standard assessment; an
+    // under-development or informational registry entry (e.g. a gene-editing project) and a curated
+    // N1C_Assessed_Variants match are shown but the assessment continues normally.
+    const n1cRegistry = assessmentsObj.N1C_Registry_Check;
+    const hasN1C = !!(n1cRegistry && !n1cRegistry.under_development && !n1cRegistry.informational);
+    const n1cGeneKnockdown = assessmentsObj && assessmentsObj.N1C_Gene_Knockdown;
+    const hasN1CKnockdown = !!(n1cGeneKnockdown && !n1cGeneKnockdown.under_development);
+
+    if (data.summary) {
+        let geneHTML = data.summary.gene || 'N/A';
+        if (data.summary.gene_url) {
+            geneHTML = `<a href="${data.summary.gene_url}" target="_blank" rel="noopener noreferrer">${geneHTML}</a>`;
+        }
+        
+        let haploHTML = (data.summary.haploinsufficiency && data.summary.haploinsufficiency.text) || 'N/A';
+        if (data.summary.haploinsufficiency && data.summary.haploinsufficiency.url) {
+            haploHTML = `<a href="${data.summary.haploinsufficiency.url}" target="_blank" rel="noopener noreferrer">${haploHTML}</a>`;
+        }
+
+        let triploHTML = (data.summary.triplosensitivity && data.summary.triplosensitivity.text) || 'N/A';
+        if (data.summary.triplosensitivity && data.summary.triplosensitivity.url) {
+            triploHTML = `<a href="${data.summary.triplosensitivity.url}" target="_blank" rel="noopener noreferrer">${triploHTML}</a>`;
+        }
+
+        // Transcript link to Ensembl transcript page when available
+        const txId = data.summary.transcript_id || null;
+        const transcriptHTML = txId
+            ? (String(txId).startsWith('ENST')
+                ? `<a href="https://www.ensembl.org/Homo_sapiens/Transcript/Summary?t=${encodeURIComponent(txId)}" target="_blank" rel="noopener noreferrer">${txId}</a>`
+                : `<a href="https://www.ensembl.org/Homo_sapiens/Search/Results?q=${encodeURIComponent(txId)};site=ensembl" target="_blank" rel="noopener noreferrer">${txId}</a>`)
+            : 'N/A';
+
+        // Transcript selection warning + switch control (only present when the user typed a specific transcript)
+        const txInfo = data.transcript_info || null;
+        let transcriptWarningHTML = '';
+        let transcriptSwitchHTML = '';
+        if (txInfo) {
+            // The warning/version-note describe the user's input transcript, so once there's a
+            // toggle to switch away from it, only show them while that transcript is displayed.
+            // (When there's no toggle, e.g. the "could not confirm transcript" fallback, always show.)
+            const showTranscriptWarning = txInfo.selected === 'input' || !txInfo.available_alternate;
+            if (showTranscriptWarning) {
+                if (txInfo.warning) {
+                    transcriptWarningHTML += `<br><span style="color:#b45309;">&#9888; ${txInfo.warning}</span>`;
+                }
+                if (txInfo.version_note) {
+                    transcriptWarningHTML += `<br><span style="color:#6b7280; font-size:0.9em;">${txInfo.version_note}</span>`;
+                }
+            }
+            if (txInfo.available_alternate) {
+                const switchLabel = txInfo.selected === 'input'
+                    ? `Switch to ${txInfo.default_label} (${txInfo.default_transcript_id})`
+                    : `Switch to input transcript (${txInfo.input_transcript_id})`;
+                transcriptSwitchHTML = `<div style="margin-top:0.6em;"><button type="button" onclick="window.toggleTranscriptView()" style="font-size:0.85em;">${switchLabel}</button></div>`;
+            }
+        }
+        // Mode of Inheritance links to the same page as Gene (external shows both)
+        let moiHTML = '<span style="color:#dc3545; font-weight:bold;">Not available</span>';
+        const moiArr = data.summary.moi || [];
+        if (moiArr.length > 0) {
+            if (data.summary.gene_url) {
+                moiHTML = moiArr.map(m => `<a href="${data.summary.gene_url}" target="_blank" rel="noopener noreferrer">${m}</a>`).join(', ');
+            } else {
+                moiHTML = moiArr.join(', ');
+            }
+        }
+        
+        // Orphanet link for the gene
+        const orphaURL = data.summary.gene ? `https://www.orpha.net/en/disease/gene/${encodeURIComponent(data.summary.gene)}` : null;
+        const orphaLinkHTML = orphaURL ? `<a href="${orphaURL}" target="_blank" rel="noopener noreferrer">${data.summary.gene}</a>` : 'N/A';
+        const proteinEffectHTML = data.summary.protein_effect || 'N/A';
+        const rcnvObj = data.summary.rcnv || {};
+        const rcnvLink = rcnvObj.url || "#";
+        // Create links for the scores
+        const pHaploHTML = rcnvObj.pHaplo && rcnvObj.pHaplo !== 'N/A' 
+            ? `<a href="${rcnvLink}" target="_blank" rel="noopener noreferrer" title="Collins et al. 2022">${rcnvObj.pHaplo}</a>` 
+            : 'N/A';
+        const pTriploHTML = rcnvObj.pTriplo && rcnvObj.pTriplo !== 'N/A'
+            ? `<a href="${rcnvLink}" target="_blank" rel="noopener noreferrer" title="Collins et al. 2022">${rcnvObj.pTriplo}</a>`
+            : 'N/A';
+
+        html += `<div class="summary-block"><h4>Query Summary</h4><ul>
+                                <li><strong>Gene:</strong> ${geneHTML}</li>
+                                <li><strong>Transcript:</strong> ${transcriptHTML}${transcriptSwitchHTML}${transcriptWarningHTML}</li>
+                                <li><strong>Protein consequence:</strong> ${proteinEffectHTML}</li>
+                                <li><strong>Mode of Inheritance:</strong> ${moiHTML}</li>
+                                <li><strong>ClinGen Haploinsufficiency:</strong> ${haploHTML}</li>
+                                <li><strong>ClinGen Triplosensitivity:</strong> ${triploHTML}</li>
+                                <li><strong>pHaplo:</strong> ${pHaploHTML}</li>
+                                <li><strong>pTriplo:</strong> ${pTriploHTML}</li>
+                                <li><strong>Orphanet:</strong> ${orphaLinkHTML}</li>
+                                ${data.summary.note ? `<li><strong>Notes:</strong> ${data.summary.note}</li>` : ''}
+                                </ul></div>`;
+       }
+
+    html += '<div id="igv-container" style="display:none;"></div>';
+
+    // Literature accordion (PubMed and Google Scholar) above assessments
+    if (data.summary && data.summary.gene) {
+        html += '<div class="section-block"><div class="section-header-row"><h4>Literature search</h4><div class="expand-controls"><button id="expand-collapse-literature" class="secondary" data-expanded="false">Expand/Collapse</button></div></div>';
+        html += '<div id="literature-accordions">';
+        const gene = data.summary.gene;
+        const pubmedQuery = `(${gene}) AND (ASO OR AON OR "Antisense oligonucleotide")`;
+        const pubmedURL = 'https://pubmed.ncbi.nlm.nih.gov/?term=' + encodeURIComponent(pubmedQuery);
+
+        html += `<div class="strategy-block">
+                <div id="toggle-literature" class="result-header unable-to-assess accordion-toggle" style="cursor: pointer; user-select: none;">
+                    <h4>Antisense Oligonucleotide<span class="chevron">&#9662;</span></h4>
+                </div>
+                <div id="content-literature" class="result-block" style="display: none;">
+                    <p><strong>Query:</strong> ${esc(pubmedQuery)}</p>
+                    <div id="pubmed-results" data-gene="${esc(gene)}">Loading PubMed results...</div>
+                    <div class="pubmed-footer"><a href="${pubmedURL}" target="_blank" rel="noopener noreferrer">Open full results on PubMed</a></div>
+                    <p class="note" style="margin-top:0.5em;">Powered by NCBI E-utilities.</p>
+                </div>
+            </div>`;
+
+        // Varaico: direct link to variant-specific literature (no accordion expansion)
+        if (data.summary.varaico_url) {
+            html += `<div class="strategy-block">
+                <a href="${data.summary.varaico_url}" target="_blank" rel="noopener noreferrer" class="result-header unable-to-assess" style="display:block; text-decoration:none; cursor:pointer; border-radius:10px;" title='Varaico stands for "Variation Research Advancing Insight in Complex Organisms" and accompanies the UCSC genome browser track. It explores literature-extracted genetic variants and their associated publications.'>
+                    <h4>Varaico <span class="chevron">&#8599;</span></h4>
+                </a>
+            </div>`;
+        }
+
+        // LitVar2: direct link to publications mentioning this variant, keyed by its dbSNP rsID
+        // (backend-resolved; only present when LitVar2 has an entry for that rsID)
+        const litvar = data.summary.litvar;
+        if (litvar && litvar.url) {
+            const litvarCount = Number(litvar.pmids_count);
+            const litvarCountHTML = Number.isFinite(litvarCount) && litvarCount > 0
+                ? ` (${litvarCount.toLocaleString()} publication${litvarCount === 1 ? '' : 's'})`
+                : '';
+            html += `<div class="strategy-block">
+                <a href="${litvar.url}" target="_blank" rel="noopener noreferrer" class="result-header unable-to-assess" style="display:block; text-decoration:none; cursor:pointer; border-radius:10px;" title='LitVar2 (NCBI) collects publications that mention this variant, matched by its dbSNP identifier ${litvar.rsid} across the different notations papers use to cite it.'>
+                    <h4>LitVar2 &ndash; ${litvar.rsid}${litvarCountHTML} <span class="chevron">&#8599;</span></h4>
+                </a>
+            </div>`;
+        }
+
+        // Shared by the Pathomechanism/Splicing searches below: narrows the search to this
+        // gene/transcript AND whichever variant notations (cDNA, single-letter protein, genomic)
+        // the backend resolved for the variant, regardless of which one the user typed.
+        function buildGeneVariantPrefix(gene, data) {
+            const txId = data.summary && data.summary.transcript_id;
+            const idParts = [];
+            if (gene) idParts.push(gene);
+            if (txId) idParts.push(`"${txId}"`);
+            const idClause = idParts.length ? `(${idParts.join(' OR ')})` : '';
+
+            const variantTerms = (data.summary && data.summary.variant_notations) || [];
+            const variantClause = variantTerms.length ? `(${variantTerms.join(' OR ')})` : '';
+
+            if (idClause && variantClause) return `${idClause} AND ${variantClause}`;
+            return idClause || variantClause;
+        }
+
+        // Pathomechanism (Mechanism of Action) contextual PubMed search
+        (function(){
+            const prefix = buildGeneVariantPrefix(gene, data);
+            const terms = '("Pathomechanism" OR "Hypomorphic" OR "Hypomorph" OR "Gain of Function" OR GoF OR "Gain-of-Function" OR LoF OR "loss of function" OR "loss-of-function" OR DN OR "dominant-negative" OR "Dominant negative")';
+            const moaQuery = prefix ? `${prefix} AND ${terms}` : terms;
+            const pmUrl = 'https://pubmed.ncbi.nlm.nih.gov/?term=' + encodeURIComponent(moaQuery);
+            html += `
+                <div class="strategy-block">
+                    <div id="toggle-moa-pubmed" class="result-header unable-to-assess accordion-toggle" style="cursor: pointer; user-select: none;">
+                        <h4>Pathomechanism<span class="chevron">&#9662;</span></h4>
+                    </div>
+                    <div id="content-moa-pubmed" class="result-block" style="display: none;">
+                        <p><strong>Query:</strong> ${esc(moaQuery)}</p>
+                        <div id="pubmed-moa-results" class="pubmed-context" data-query="${esc(moaQuery)}">Loading PubMed results...</div>
+                        <div class="pubmed-footer"><a href="${pmUrl}" target="_blank" rel="noopener noreferrer">Open full results on PubMed</a></div>
+                        <p class="note" style="margin-top:0.5em;">Powered by NCBI E-utilities.</p>
+                    </div>
+                </div>`;
+        })();
+
+        // Splicing contextual PubMed search
+        (function(){
+            const prefix = buildGeneVariantPrefix(gene, data);
+            const terms = '("RNA-seq" OR "RNA sequencing" OR "RT-PCR" OR "RT-qPCR" OR "functional validation" OR "functional evidence")';
+            const spliceQuery = prefix ? `${prefix} AND ${terms}` : terms;
+            const pmUrl = 'https://pubmed.ncbi.nlm.nih.gov/?term=' + encodeURIComponent(spliceQuery);
+            html += `
+                <div class="strategy-block">
+                    <div id="toggle-splice-pubmed" class="result-header unable-to-assess accordion-toggle" style="cursor: pointer; user-select: none;">
+                        <h4>Splicing<span class="chevron">&#9662;</span></h4>
+                    </div>
+                    <div id="content-splice-pubmed" class="result-block" style="display: none;">
+                        <p><strong>Query:</strong> ${esc(spliceQuery)}</p>
+                        <div id="pubmed-splice-results" class="pubmed-context" data-query="${esc(spliceQuery)}">Loading PubMed results...</div>
+                        <div class="pubmed-footer"><a href="${pmUrl}" target="_blank" rel="noopener noreferrer">Open full results on PubMed</a></div>
+                        <p class="note" style="margin-top:0.5em;">Powered by NCBI E-utilities.</p>
+                    </div>
+                </div>`;
+        })();
+        html += '</div>'; // end #literature-accordions
+        html += '</div>'; // end .section-block (literature search)
+    }
+
+    if (data.assessments) {
+        html += '<div class="section-block"><div class="section-header-row"><h4>Therapeutic Assessments</h4><div class="expand-controls"><button id="expand-collapse-assessments" class="secondary" data-expanded="false">Expand/Collapse</button></div></div>';
+        html += '<div id="assessments-accordions">';
+        
+        // --- MOI Override Block ---
+        let currentMoi = null;
+        if (window.userMoiOverride && window.userMoiOverride.moi && window.userMoiOverride.moi.length > 0) {
+            const m = window.userMoiOverride.moi[0];
+            if (m.includes('Autosomal dominant')) currentMoi = 'AD';
+            else if (m.includes('Autosomal recessive')) currentMoi = 'AR';
+            else if (m.includes('X-linked dominant')) currentMoi = 'XD';
+            else if (m.includes('X-linked recessive')) currentMoi = 'XR';
+        }
+        const getMoiBtnClass = (moi) => (currentMoi === moi ? 'yes-btn' : 'neutral-btn');
+        const moiUnavailable = !(summaryObj.moi && summaryObj.moi.length > 0);
+
+        html += `<div class="strategy-block">
+            <div id="toggle-moi-override" class="result-header unable-to-assess accordion-toggle${moiUnavailable ? ' open' : ''}" style="cursor: pointer; user-select: none;">
+                <h4>Mode of Inheritance<span class="chevron">&#9662;</span></h4>
+            </div>
+            <div id="content-moi-override" class="result-block" style="display: ${moiUnavailable ? 'block' : 'none'};">
+                ${moiUnavailable ? '<p style="color:#dc3545; font-weight:bold;">Mode of Inheritance could not be obtained from ClinGen, please provide Mode of Inheritance here!</p>' : ''}
+                <p style="font-weight: bold;">If the ClinGen Mode of Inheritance is incorrect or missing, you can manually select one here to reassess eligibility.</p>
+                <div class="splice-prompt-buttons">
+                    <button id="moi-choice-ad" type="button" class="${getMoiBtnClass('AD')}">AD</button>
+                    <button id="moi-choice-ar" type="button" class="${getMoiBtnClass('AR')}">AR</button>
+                    <button id="moi-choice-xd" type="button" class="${getMoiBtnClass('XD')}">XD</button>
+                    <button id="moi-choice-xr" type="button" class="${getMoiBtnClass('XR')}">XR</button>
+                </div>
+            </div>
+        </div>`;
+
+        // MoA selection block inside Therapeutic Assessments
+        if (!hasN1C) {
+            const currentMoa = resolvedMoa; // 'GoF', 'LoF', 'DN' or null
+            const getMoaBtnClass = (m) => (currentMoa === m ? 'yes-btn' : 'neutral-btn');
+
+            html += `<div class="strategy-block">`;
+            html += `<div id="toggle-moa" class="result-header unable-to-assess accordion-toggle" style="cursor: pointer; user-select: none;">
+                          <h4>Mechanism of Action ${currentMoa ? ': ' + currentMoa : ''} <span class="chevron">&#9662;</span></h4>
+                      </div>`;
+            html += `<div id="content-moa" class="result-block" style="display: block;">
+                        <p style="font-weight: bold;">Please select the mechanism relevant to your variant to assess for mechanism-specific strategies (Knockdown, WT Upregulation):</p>
+                        <div class="splice-prompt-buttons">
+                            <button id="moa-choice-gof" type="button" class="${getMoaBtnClass('GoF')}">GoF</button>
+                            <button id="moa-choice-lof" type="button" class="${getMoaBtnClass('LoF')}">LoF</button>
+                            <button id="moa-choice-dn" type="button" class="${getMoaBtnClass('DN')}">DN</button>
+                        </div>
+                    `;
+            html += `</div></div>`;
+        }
+        for (const [strategy, result] of Object.entries(data.assessments)) {
+            if (hasN1CKnockdown && strategy === 'Knockdown') continue;
+            const strategyName = strategy.replace(/_/g, ' ').replace(/\w/g, l => l.toUpperCase());
+
+            // --- START: MODIFIED LOGIC FOR SPLICE_SWITCHING & EXONIC PATHOGENICITY (COMBINED) ---
+            if (strategy === 'Splice_Switching' && !Array.isArray(result) && result.user_validation_prompt_exonic_pathogenicity) {
+                // Render the special "Awaiting Pathogenicity Input" block
+                html += `<div class="strategy-block">`;
+                html += `<div id="toggle-${strategy}" class="result-header unable-to-assess accordion-toggle" style="cursor: pointer; user-select: none;">
+                             <h4>${strategyName}: Awaiting User Input <span class="chevron">&#9662;</span></h4>
+                         </div>`;
+                // Set to 'block' so the user sees the question immediately
+                html += `<div id="content-${strategy}" class="result-block" style="display: block;">`; 
+                html += `<p style="font-weight: bold;">${result.reason}</p>`;
+                
+                html += `<div class="splice-prompt-buttons">
+                             <button id="exonic-pathogenicity-yes" type="button" class="no-btn">Pathogenic Effects (independent of splicing)</button>
+                             <button id="exonic-pathogenicity-no" type="button" class="yes-btn">No Pathogenic Effects (independent of splicing)</button>
+                         </div>`;
+                html += `</div></div>`;
+            
+            } else if (strategy === 'Splice_Switching' && !Array.isArray(result) && result.user_validation_prompt) {
+                // Render the special "Awaiting Validation" block with "Yes/No" buttons
+                html += `<div class="strategy-block">`;
+                html += `<div id="toggle-${strategy}" class="result-header unable-to-assess accordion-toggle" style="cursor: pointer; user-select: none;">
+                             <h4>${strategyName}: Awaiting Validation <span class="chevron">&#9662;</span></h4>
+                         </div>`;
+                // Set to 'block' so the user sees the question immediately
+                html += `<div id="content-${strategy}" class="result-block" style="display: block;">`; 
+               
+                html += `<p style="font-weight: bold;">Splicing effect was not found in databases. Is there a known splice-altering effect validated with qPCR or Transcriptomics?</p>`;
+               
+                html += `<div class="splice-prompt-buttons">
+                             <button id="splice-validation-yes" type="button" class="yes-btn">Yes</button>
+                             <button id="splice-validation-no" type="button" class="no-btn">No</button>
+                         </div>`;
+                html += `</div></div>`;
+            } else {
+                // Normalize result to array to handle multiple assessments (e.g. single + double exon skipping)
+                const resultsArray = Array.isArray(result) ? result : [result];
+                
+                resultsArray.forEach((resItem, idx) => {
+                // This is the "else" block: it contains all the *original* rendering logic
+                let classificationClass = (resItem.classification || "Unable to Assess").toLowerCase().replace(/ /g, '-');
+                // --- START: CUSTOM CLASSIFICATION MAPPING ---
+                const strategyToTabMap = {
+                    'Exon_Skipping': 'skipping',
+                    'Splice_Switching': 'splice',
+                    'Knockdown': 'knockdown',
+                    'WT_Upregulation': 'wt'
+                };
+                const tabId = strategyToTabMap[strategy];
+                const infoLink = tabId ? `<a href="/about#${tabId}" class="info-link" title="View methods for ${strategyName}">&#9432;</a>` : '';
+                const suffix = resultsArray.length > 1 ? ` (Option ${idx + 1})` : '';
+                const uniqueId = resultsArray.length > 1 ? `${strategy}-${idx}` : strategy;
+                
+                // Map WT Upregulation labels to existing CSS classes for color consistency
+                if (classificationClass === 'potential-possibilities-identified') {
+                    classificationClass = 'likely-eligible';
+                } else if (classificationClass === 'no-potential-possibilities-identified') {
+                    classificationClass = 'unlikely-eligible';
+                } else if (classificationClass === 'manual-assessment-required') {
+                    // Map 'Manual Assessment Required' to the 'Unable to Assess' style
+                    classificationClass = 'unable-to-assess';
+                }
+                
+                const isUnderDevN1C = (strategy === 'N1C_Registry_Check' || strategy === 'N1C_Gene_Knockdown') && (resItem.under_development || resItem.informational);
+                html += `<div class="strategy-block">`;
+                html += `<div id="toggle-${uniqueId}" class="result-header ${classificationClass} accordion-toggle${isUnderDevN1C ? ' open' : ''}" style="cursor: pointer; user-select: none;">
+                             <h4>${strategyName}${suffix} ${infoLink} <span class="chip-status status-${classificationClass}">${resItem.classification || "N/A"}</span> <span class="chevron">&#9662;</span></h4>
+                         </div>`;
+                // Under-development N1C entries are expanded by default so the user sees them immediately
+                const defaultDisplay = isUnderDevN1C ? 'block' : 'none';
+                html += `<div id="content-${uniqueId}" class="result-block" style="display: ${defaultDisplay};">`;
+                
+                if (strategy === 'Exon_Skipping' && resItem.total_exon_number && resItem.gene_id && resItem.transcript_id) {
+                    const ensemblLink = `https://www.ensembl.org/Homo_sapiens/Transcript/Exons?db=core;g=${resItem.gene_id};t=${resItem.transcript_id}`;
+                    html += `<p><strong>Target:</strong> <a href="${ensemblLink}" target="_blank" rel="noopener noreferrer">Exon ${resItem.total_exon_number}</a></p>`;
+                }
+                if (strategy === 'Exon_Skipping' && resItem.exon_length) {
+                    html += `<p><strong>Exon Length:</strong> ${resItem.exon_length} nt</p>`;
+                }
+                if(resItem.reason) html += `<p><strong>Reason:</strong> ${resItem.reason}</p>`;
+                
+                if(resItem.note) {
+                    html += `<p class="warning" style="margin-top: 0.5em;"><strong>Warning:</strong> ${resItem.note}</p>`;
+                }
+                
+                if(resItem.details) {
+                    html += '<h5>Details</h5><ul>';
+                    for (const [key, value] of Object.entries(resItem.details)) {
+                        // Values are plain text or http(s) URLs; N1C entries may list several URLs as 'url1, url2'
+                        const text = String(value ?? '');
+                        const urls = text.split(/,\s+/);
+                        if (text && urls.every(u => /^https?:\/\//i.test(u))) {
+                            const links = urls.map(u => `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(u)}</a>`).join(', ');
+                            html += `<li><strong>${esc(key)}:</strong> ${links}</li>`;
+                        } else {
+                            html += `<li><strong>${esc(key)}:</strong> ${esc(text)}</li>`;
+                        }
+                    }
+                    html += '</ul>';
+                }
+
+                // One override form + commit button per result option (uniqueId), so each exon-skipping
+                // option (single exon, exon pairs) can be overridden on its own
+                if (resItem.checks && strategy !== 'WT_Upregulation') {
+                    const totalChecks = Object.keys(resItem.checks).length;
+                    const passedChecks = Object.values(resItem.checks).filter(c => c.passed).length;
+                    const hasEffectiveOverrides = Object.values(resItem.checks).some(c => c.overridden && c.passed !== c.original_passed);
+                    let overrideNote = hasEffectiveOverrides ? ' <span class="note">(Manual Override Applied)</span>' : '';
+
+                    html += `<h5>Guideline Checks <span class="chip ${passedChecks===totalChecks ? 'chip-ok':'chip-warn'}">${passedChecks}/${totalChecks} passed</span>${overrideNote}</h5>`;
+                    html += `<div id="override-form-${uniqueId}" class="override-form"><ul class="checklist interactive">`;
+                    for (const [check, status] of Object.entries(resItem.checks)) {
+                        const isPassed = status.passed;
+                        const isChanged = status.overridden && (status.passed !== status.original_passed);
+                        const overrideIndicator = isChanged ? ' <span class="note">(override)</span>' : '';
+                        const textContent = `${check}${overrideIndicator}`;
+                        html += `<li class="${isPassed ? 'pass' : 'fail'}" data-check-name="${check}" data-original-passed="${status.original_passed}">${isChanged ? `<strong>${textContent}</strong>` : textContent}</li>`;
+                    }
+                    html += '</ul></div>';
+                    html += `<div id="override-controls-${uniqueId}" class="override-controls" style="display: none; margin-top: 1em;"><button type="button" class="commit-overrides-btn" data-strategy="${strategy}" data-form-id="${uniqueId}">Commit Manual Overrides</button></div>`;
+                }
+                if (resItem.pathogenic_variant_counts) {
+                    let evidenceHeader = '<h5>Evidence from Databases</h5>';
+                    if (resItem.clinvar_url) {
+                        evidenceHeader = `<h5><a href="${resItem.clinvar_url}" target="_blank" rel="noopener noreferrer">Evidence from Databases (ClinVar)</a></h5>`;
+                    }
+                    html += evidenceHeader;
+
+                    let domainHTML = resItem.domain_count || 'N/A';
+                    if (Array.isArray(resItem.domain_details) && resItem.domain_details.length > 0) {
+                        const domainItems = resItem.domain_details.map(d => {
+                            const baseLabel = d.label || [d.name, d.source].filter(Boolean).join(' ') || 'Domain';
+                            const label = esc(d.source && !baseLabel.includes(d.source) ? `${baseLabel} (${d.source})` : baseLabel);
+                            if (d.url) return `<li><a href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">${label}</a></li>`;
+                            return `<li>${label}</li>`;
+                        }).join('');
+                        domainHTML = `<ul class="domain-list">${domainItems}</ul>`;
+                    } else if (resItem.domain_names && resItem.domain_names.length > 0) {
+                        domainHTML = resItem.domain_names.map(esc).join(', ');
+                    }
+
+                    let trexomeHTML = 'None found';
+                    if (Array.isArray(resItem.trexome_repeats) && resItem.trexome_repeats.length > 0) {
+                        const trexomeItems = resItem.trexome_repeats.map(r => {
+                            const label = esc(r.repeat_type || 'Tandem repeat');
+                            const pctSuffix = (typeof r.overlap_percentage === 'number') ? ` (${r.overlap_percentage.toFixed(2)}% overlap)` : '';
+                            if (r.url) return `<li><a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">${label}</a>${pctSuffix}</li>`;
+                            return `<li>${label}${pctSuffix}</li>`;
+                        }).join('');
+                        trexomeHTML = `<ul class="domain-list">${trexomeItems}</ul>`;
+                    }
+                    let trexomeGeneHTML = '';
+                    if (strategy === 'Exon_Skipping') {
+                        const trexomeGene = (data.summary && data.summary.trexome_repeats) || {};
+                        const trexomeGeneCount = trexomeGene.repeat_count || 0;
+                        if (trexomeGeneCount > 0) {
+                            const typesSuffix = (trexomeGene.repeat_types && trexomeGene.repeat_types.length > 0) ? ` (${esc(trexomeGene.repeat_types.join(', '))})` : '';
+                            const geneCountHTML = trexomeGene.url
+                                ? `<a href="${esc(trexomeGene.url)}" target="_blank" rel="noopener noreferrer">${esc(trexomeGeneCount)}${typesSuffix}</a>`
+                                : `${trexomeGeneCount}${typesSuffix}`;
+                            trexomeGeneHTML = `<div class="note" style="margin: 0 0 0.3em 0;">Gene total: ${geneCountHTML}</div>`;
+                        }
+                    }
+
+                    const spliceVariantLinks = resItem.splice_variant_links || {};
+                    const pathogenicLinks = resItem.pathogenic_variant_links || {};
+                    const renderVariantLinks = (variants) => {
+                        if (!Array.isArray(variants) || variants.length === 0) return '';
+                        const items = variants.map(v => {
+                            const label = esc(v.id || 'Variant');
+                            if (v.url) return `<a href="${esc(v.url)}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+                            return label;
+                        }).join(', ');
+                        return `<div class="note" style="margin: 0.15em 0 0 0.75em;">${items}</div>`;
+                    };
+                    const benignSpliceLinks = renderVariantLinks(spliceVariantLinks.benign);
+                    const benignSpliceCount = resItem.pathogenic_variant_counts.benign_splice || 0;
+
+                    html += `<ul>
+                                    <li><strong>Fraction of Protein:</strong> ${resItem.frac_cds || 'N/A'}</li>
+                                    <li><strong>Overlapping Protein Domains:</strong> ${domainHTML}</li>
+                                    <li><strong>Tandem Repeat Domains (TReXome DB):</strong>${trexomeGeneHTML}${trexomeHTML}</li>
+                                    <li><strong>Pathogenic Variants in Exon (≥ 2-Star rating on ClinVar):</strong><ul>
+                                        <li>Missense: ${resItem.pathogenic_variant_counts.missense}${renderVariantLinks(pathogenicLinks.missense)}</li>
+                                        <li>Nonsense: ${resItem.pathogenic_variant_counts.nonsense}${renderVariantLinks(pathogenicLinks.nonsense)}</li>
+                                        <li>Frameshift: ${resItem.pathogenic_variant_counts.frameshift}${renderVariantLinks(pathogenicLinks.frameshift)}</li>
+                                        <li>In-frame Deletions: ${resItem.pathogenic_variant_counts.inframe_del}${renderVariantLinks(pathogenicLinks.inframe_del)}</li>
+                                        <li>Splice Site: ${resItem.pathogenic_variant_counts.splice}${renderVariantLinks(pathogenicLinks.splice)}</li>
+                                        <li>Benign Splice Site: ${benignSpliceCount}${benignSpliceLinks}</li>
+                                    </ul></li>
+                                </ul>`;
+                }
+
+                if (strategy === 'Knockdown') {
+                    (function(){
+                        const gene = (data.summary && data.summary.gene) ? data.summary.gene : '';
+                        const origQ = document.getElementById('query').value;
+                        const cdnaMatch = origQ ? origQ.match(/c\.[^\s\)\]]+/i) : null;
+                        const cdna = cdnaMatch ? cdnaMatch[0] : '';
+                        const refseqMatch = origQ ? origQ.match(/(NM_[0-9]+\.?[0-9]*)/i) : null;
+                        const refseq = refseqMatch ? refseqMatch[1] : '';
+                        const parts = [];
+                        if (gene && cdna) parts.push(`(${gene} AND ${cdna})`);
+                        if (refseq) parts.push(refseq);
+                        const prefix = parts.length ? `(${parts.join(' OR ')})` : '';
+                        const terms = '((antisense OR ASO) AND (knockdown OR "gene silencing" OR "allele specific" OR "allele-specific"))';
+                        const kdQuery = prefix ? `${prefix} AND ${terms}` : terms;
+                        const pmUrl = 'https://pubmed.ncbi.nlm.nih.gov/?term=' + encodeURIComponent(kdQuery);
+                        const kdToggleId = `toggle-${strategy}-pubmed`;
+                        const kdContentId = `content-${strategy}-pubmed`;
+                        const kdResultsId = `pubmed-${strategy}-results`;
+                        html += `
+                        <div class="strategy-block pubmed-accordion">
+                            <div id="${kdToggleId}" class="result-header unable-to-assess accordion-toggle" style="cursor: pointer; user-select: none;">
+                                <h5>PubMed: Knockdown Evidence <span class="chevron">&#9662;</span></h5>
+                            </div>
+                            <div id="${kdContentId}" class="result-block" style="display: none;">
+                                <p><strong>Related PubMed Search:</strong> ${esc(kdQuery)}</p>
+                                <div id="${kdResultsId}" class="pubmed-context" data-query="${esc(kdQuery)}">Loading PubMed results...</div>
+                                <div class="pubmed-footer"><a href="${pmUrl}" target="_blank" rel="noopener noreferrer">Open full results on PubMed</a></div>
+                                <p class="note" style="margin-top:0.5em;">Powered by NCBI E-utilities.</p>
+                            </div>
+                        </div>`;
+                    })();
+                }
+                html += `</div></div>`;
+                }); // End resultsArray.forEach
+            }
+        }
+        html += '</div>'; // end #assessments-accordions
+        html += '</div>'; // end .section-block (therapeutic assessments)
+    }
+
+    // Add Commentary & Download section at the end
+    html += `<div class="strategy-block">
+                <div id="toggle-report" class="result-header unable-to-assess accordion-toggle" style="cursor: pointer; user-select: none;">
+                    <h4>Add Commentary & Download Report <span class="chevron">&#9662;</span></h4>
+                </div>
+                <div id="content-report" class="result-block" style="display: none;">
+                    <h5>Your Commentary</h5>
+                    <textarea id="user-commentary" placeholder="Add your notes, interpretation, or next steps here. This will be included in the downloaded report." style="width: 100%; min-height: 120px; padding: .5em; border-radius: 4px; border: 1px solid #ccc; font-family: inherit; font-size: .95em;"></textarea>
+                    <button id="download-report-btn" type="button" style="margin-top: 1em;">Download HTML Report</button>
+                </div>
+            </div>`;
+    resultsDiv.innerHTML = html;
+
+    // Expand/Collapse wiring, scoped per section (Literature search / Therapeutic Assessments)
+    (function(){
+        function wireToggle(buttonId, containerId) {
+            const toggleBtn = document.getElementById(buttonId);
+            const container = document.getElementById(containerId);
+            if (!toggleBtn || !container) return;
+            toggleBtn.addEventListener('click', () => {
+                const expanding = toggleBtn.dataset.expanded !== 'true';
+                container.querySelectorAll('.result-block').forEach(el => el.style.display = expanding ? 'block' : 'none');
+                container.querySelectorAll('.accordion-toggle').forEach(t => t.classList.toggle('open', expanding));
+                toggleBtn.dataset.expanded = expanding ? 'true' : 'false';
+            });
+        }
+        wireToggle('expand-collapse-literature', 'literature-accordions');
+        wireToggle('expand-collapse-assessments', 'assessments-accordions');
+    })();
+
+    // Restore commentary from session/global state
+    const commentaryTextarea = document.getElementById('user-commentary');
+    if (commentaryTextarea && window.userCommentary) {
+        commentaryTextarea.value = window.userCommentary;
+    }
+    // Save commentary to global state on input
+    if(commentaryTextarea) commentaryTextarea.addEventListener('input', (e) => { window.userCommentary = e.target.value; });
+
+    // Fetch PubMed articles via NCBI E-utilities and render inline
+    (async () => {
+        const container = document.getElementById('pubmed-results');
+        if (!container) return;
+        const gene = container.getAttribute('data-gene');
+        const query = `(${gene}) AND (ASO OR AON OR "Antisense oligonucleotide")`;
+        try {
+            const esearchUrl = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&retmode=json&retmax=20&term=' + encodeURIComponent(query);
+            const esJson = await ncbiFetchJson(esearchUrl);
+            const ids = (esJson.esearchresult && esJson.esearchresult.idlist) || [];
+            if (!ids.length) { container.innerHTML = 'No PubMed results found.'; return; }
+            const esummaryUrl = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&retmode=json&id=' + ids.join(',');
+            const sumJson = await ncbiFetchJson(esummaryUrl);
+            const result = sumJson.result || {};
+            const uids = result.uids || ids;
+            let out = '<ul class="pubmed-list">';
+            for (const uid of uids) {
+                const rec = result[uid];
+                if (!rec) continue;
+                const title = rec.title || '(no title)';
+                const journal = rec.fulljournalname || rec.source || '';
+                const pubdate = rec.pubdate || rec.epubdate || '';
+                const authors = Array.isArray(rec.authors) ? rec.authors.slice(0,3).map(a => a.name).join(', ') : '';
+                const link = `https://pubmed.ncbi.nlm.nih.gov/${uid}/`;
+                out += `<li class="pubmed-card">` +
+                       `<div class="pubmed-title">${esc(title)}</div>` +
+                       `<div class="pubmed-meta">${esc(journal)}${journal && pubdate ? ' &middot; ' : ''}${esc(pubdate)}${authors ? ' &middot; ' + esc(authors) : ''}</div>` +
+                       `<div class="pubmed-card-footer"><a class="pubmed-article-link" href="${link}" target="_blank" rel="noopener noreferrer">View on PubMed</a></div>` +
+                       `</li>`;
+            }
+            out += '</ul>';
+            container.innerHTML = out;
+        } catch (e) {
+            container.innerHTML = 'Unable to load PubMed results. Use the link above.';
+        }
+    })();
+
+    // Render contextual PubMed results for MoA/Splice queries if present
+    (async () => {
+        for (const container of document.querySelectorAll('.pubmed-context')) {
+            const q = container.getAttribute('data-query');
+            if (!q) continue;
+            try {
+                const esearchUrl = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&retmode=json&retmax=20&term=' + encodeURIComponent(q);
+                const esJson = await ncbiFetchJson(esearchUrl);
+                const ids = (esJson.esearchresult && esJson.esearchresult.idlist) || [];
+                if (!ids.length) { container.innerHTML = 'No PubMed results found.'; continue; }
+                const esummaryUrl = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&retmode=json&id=' + ids.join(',');
+                const sumJson = await ncbiFetchJson(esummaryUrl);
+                const result = sumJson.result || {};
+                const uids = result.uids || ids;
+                let out = '<ul class="pubmed-list">';
+                for (const uid of uids) {
+                    const rec = result[uid];
+                    if (!rec) continue;
+                    const title = rec.title || '(no title)';
+                    const journal = rec.fulljournalname || rec.source || '';
+                    const pubdate = rec.pubdate || rec.epubdate || '';
+                    const authors = Array.isArray(rec.authors) ? rec.authors.slice(0,3).map(a => a.name).join(', ') : '';
+                    const link = `https://pubmed.ncbi.nlm.nih.gov/${uid}/`;
+                    out += `<li class="pubmed-card">` +
+                           `<div class="pubmed-title">${esc(title)}</div>` +
+                           `<div class="pubmed-meta">${esc(journal)}${journal && pubdate ? ' &middot; ' : ''}${esc(pubdate)}${authors ? ' &middot; ' + esc(authors) : ''}</div>` +
+                           `<div class="pubmed-card-footer"><a class="pubmed-article-link" href="${link}" target="_blank" rel="noopener noreferrer">View on PubMed</a></div>` +
+                           `</li>`;
+                }
+                out += '</ul>';
+                container.innerHTML = out;
+            } catch (e) {
+                container.innerHTML = 'Unable to load PubMed results. Use the link above.';
+            }
+        }
+    })();
+
+    document.querySelectorAll('.accordion-toggle').forEach(toggle => {
+        toggle.addEventListener('click', function() {
+            const contentId = this.id.replace('toggle-', 'content-');
+            const content = document.getElementById(contentId);
+            const isHidden = content.style.display === 'none'; content.style.display = isHidden ? 'block' : 'none'; this.classList.toggle('open', isHidden);
+        });
+    });
+
+    if (data.visualization) {
+        renderIGV('igv-container', data.visualization);
+    }
+}
+
+function downloadReport() {
+    const query = document.getElementById('query').value;
+    const commentary = document.getElementById('user-commentary').value;
+    const timestamp = new Date().toLocaleString();
+
+    let reportHTML = `
+        <!doctype html>
+        <html lang="en">
+        <head>
+            <meta charset="utf-8">
+            <title>AVEC Report: ${esc(query)}</title>
+            <style>
+                body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 2em auto; padding: 0 1em; }
+                h1, h2, h3 { color: #005a9c; border-bottom: 1px solid #eee; padding-bottom: 0.3em; }
+                a { color: #005a9c; }
+                .summary-block, .assessment-block { border: 1px solid #ddd; border-radius: 8px; padding: 1em; margin-bottom: 1.5em; background-color: #f9f9f9; }
+                .summary-block ul { list-style: none; padding: 0; }
+                .summary-block li { margin-bottom: 0.5em; }
+                .assessment-block h3 { margin-top: 0; font-size: 1.2em; }
+                .disclaimer { font-size: 0.8em; color: #777; text-align: center; margin-top: 2em; }
+                .commentary { background-color: #fffbeb; border-color: #fde68a; }
+                pre { background-color: #f0f0f0; border: 1px solid #ddd; border-radius: 4px; padding: 1em; white-space: pre-wrap; word-wrap: break-word; }
+
+                /* Guideline Checks */
+                .checklist { list-style-type: none; padding: 0; }
+                .checklist li { margin-bottom: 0.5em; }
+                .checklist li.pass::before { content: '\\2611'; color: #000; margin-right: 10px; font-weight: bold; }
+                .checklist li.fail::before { content: '\\2610'; color: #000; margin-right: 10px; font-weight: bold; }
+
+                /* Warnings */
+                .warning { color: #dc3545; font-weight: bold; }
+                .note { font-style: italic; color: #555; font-size: 0.9em; }
+            </style>
+        </head>
+        <body>
+            <h1>AVEC Assessment Report</h1>
+            <p><strong>Query:</strong> ${esc(query)}</p>
+            <p><strong>Report Generated:</strong> ${timestamp}</p>
+    `;
+
+    if (commentary) {
+        reportHTML += `<div class="summary-block commentary"><h2>User Commentary</h2><pre>${esc(commentary)}</pre></div>`;
+    }
+
+    const summaryContent = document.querySelector('.summary-block');
+    if (summaryContent) {
+        reportHTML += `<h2>Query Summary</h2><div class="summary-block">${summaryContent.innerHTML}</div>`;
+    }
+
+    // Varaico link (direct link to variant-specific literature)
+    const varaicoLink = document.querySelector('#literature-accordions a[title*="Varaico"]');
+    if (varaicoLink) {
+        reportHTML += `<div class="assessment-block"><h3>Varaico</h3><p><a href="${varaicoLink.href}" target="_blank" rel="noopener noreferrer">${varaicoLink.href}</a></p></div>`;
+    }
+
+    // LitVar2 link (publications mentioning this variant, keyed by its dbSNP rsID)
+    const litvarLink = document.querySelector('#literature-accordions a[title*="LitVar2"]');
+    if (litvarLink) {
+        reportHTML += `<div class="assessment-block"><h3>LitVar2</h3><p><a href="${litvarLink.href}" target="_blank" rel="noopener noreferrer">${litvarLink.href}</a></p></div>`;
+    }
+
+    reportHTML += `<h2>Therapeutic Assessments</h2>`;
+    document.querySelectorAll('.strategy-block').forEach(block => {
+        // Exclude the commentary/download block itself from the report
+        if (block.querySelector('#toggle-report')) return;
+        const header = block.querySelector('.result-header h4');
+        // Skip interactive selection blocks (MOI override, MoA selection) in assessments
+        if (header && (header.innerText.includes('Mode of Inheritance') || header.innerText.includes('Mechanism of Action'))) return;
+        const content = block.querySelector('.result-block');
+        if (header && content) {
+            const headerText = header.innerText.replace('▼', '').replace('▲', '').replace('&#9662;', '').replace('&#9652;', '').trim();
+            // Clone so nested accordions (e.g. PubMed evidence) can be force-expanded for the static report
+            const clone = content.cloneNode(true);
+            clone.querySelectorAll('.result-block').forEach(el => { el.style.display = 'block'; });
+            clone.querySelectorAll('.accordion-toggle').forEach(el => el.classList.add('open'));
+            // Awaiting-input prompts (e.g. Splice Switching: Awaiting Validation) have live Yes/No buttons
+            // that don't work in a static report — replace them with an explicit "no input given" note.
+            const promptButtons = clone.querySelector('.splice-prompt-buttons');
+            if (promptButtons && headerText.includes('Awaiting')) {
+                promptButtons.outerHTML = '<p class="warning"><strong>No user input was provided for this question before the report was generated.</strong></p>';
+            }
+            reportHTML += `<div class="assessment-block"><h3>${headerText}</h3>${clone.innerHTML}</div>`;
+        }
+    });
+
+    reportHTML += `<p class="disclaimer">This tool is for informational purposes only and is not for clinical use. Results require manual verification.</p></body></html>`;
+
+    const blob = new Blob([reportHTML], { type: 'text/html' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `AVEC_Report_${query.replace(/[^a-zA-Z0-9]/g, '_')}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+}
+</script>
+        <p class="disclaimer">Disclaimer: This tool does not serve as Medical Advice. Although the content of these webpages may partly be provided by individuals in the medical profession, you acknowledge that provision of such content does not create a medical professional-patient relationship and does not constitute an opinion, medical advice, professional diagnosis, service or treatment of any condition. The access to general information is provided for educational purposes only, through this site and links to other sites. The content is not recommended or endorsed by any doctor or healthcare provider. The information and content provided are not substitutes for medical or professional care, and the information is not to be used in place of a visit, call, consultation or the advice of your physician or other healthcare provider. We are not liable or responsible for any advice, course of treatment, diagnosis or any other information, services or product obtained through this site.</p>
+        <p class="disclaimer" style="margin-top:.5em; border-top:none; padding-top:0;"><a href="https://uni-koeln.de/en/site-notice" target="_blank" rel="noopener noreferrer">Site notice</a> (<a href="https://uni-koeln.de/impressum" target="_blank" rel="noopener noreferrer" lang="de">Impressum</a>) &middot; <a href="https://uni-koeln.de/en/privacy-protection-statement" target="_blank" rel="noopener noreferrer">Privacy</a> (<a href="https://uni-koeln.de/datenschutz" target="_blank" rel="noopener noreferrer" lang="de">Datenschutz</a>) &middot; <a href="/about#data-processing">Data processing &amp; third-party services</a></p>
+    </main>
+</body>
+</html>
+    
