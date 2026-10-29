@@ -1,324 +1,771 @@
-
 <!doctype html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Tool - AVEC</title>
-    <script src="https://cdn.jsdelivr.net/npm/igv@2.15.5/dist/igv.min.js" integrity="sha384-ODTJrRAKVek3XddJWCIIVSUvxZAiuZAQq05z3zN7HbqOi9ZN6WV2bUd+jbcDAwwL" crossorigin="anonymous"></script>
-    <style>
-        body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;margin:0;background-color:#f8f9fa;color:#333}
-        .container{max-width:900px;margin:auto;background:var(--card);padding:2em;border-radius:8px;box-shadow:0 4px 8px rgba(0,0,0,.1); margin-top: 2em; margin-bottom: 2em;}
-        h3,h4,h5{color:#005a9c} a{color:#005a9c; text-decoration: none;} a:hover{text-decoration: underline;}
-        nav {background-color: #333; padding: 1em; text-align: center;}
-        nav a {color: white; margin: 0 15px; text-decoration: none; font-weight: bold;}
-        .disclaimer{font-size:.8em;color:#6c757d;margin-top:2em;text-align:center; padding-top: 1em; border-top: 1px solid #eee;}
-        form{display:grid;grid-template-columns:1fr;gap:1em;align-items:center;margin-bottom:2em}
-        input,button{padding:.75em;border-radius:4px;border:1px solid #ccc;font-size:1em;width:100%;box-sizing:border-box}
-        button{background-color:#007bff;color:white;font-weight:bold;cursor:pointer;border:none;width:auto;justify-self:end;padding:.75em 1.5em}
-        button:hover{background-color:#0056b3}
-        #loader{display:none;text-align:center;padding:1em;font-size:1.2em}
-        #results{display:none}.result-header{padding:1em;color:white;border-radius:4px 4px 0 0;margin-bottom:0;}.result-header h4{margin:0;font-size:1.5em;text-align:center;color:inherit;}
-        .result-block{border: 1px solid #ddd; border-top: none; padding: 1em; margin-bottom: 1.5em; border-radius: 0 0 4px 4px;}.result-block h5{margin-bottom:.5em;color:#495057;border-bottom:1px solid #eee;padding-bottom:.3em; margin-top: 0;}
-        .checklist{list-style-type:none;padding:0}.checklist li{margin-bottom:.5em}
-        .eligible{background-color:#28a745}.likely-eligible{background-color:#17a2b8}.unlikely-eligible{background-color:#ffc107;color:#333 !important;}.not-eligible{background-color:#dc3545}.unable-to-assess{background-color:#6c757d}.error{background-color:#dc3545}.note{font-style:italic;color:#555;font-size:.9em}
-        .strategy-block {margin-bottom: 2em;}
-        .summary-block { background-color: #e9ecef; padding: 1em; border-radius: 4px; margin-bottom: 2em; }
-        #igv-container { background: #fff; border: 1px solid #ddd; border-radius: 10px; overflow: auto; resize: vertical; min-height: 220px; margin-top: 2em; margin-bottom: 1.5em; }
-        #igv-container .igv-viewport { position: relative; }
-        .igv-track-resize-handle { position: absolute; left: 0; right: 0; bottom: 0; height: 6px; cursor: ns-resize; z-index: 40; background: transparent; }
-        .igv-track-resize-handle:hover, .igv-track-resize-handle.dragging { background: rgba(0,123,255,.35); }
-        /* Style for code blocks in API docs */
-        pre { background-color: #f0f0f0; border: 1px solid #ddd; border-radius: 4px; padding: 1em; white-space: pre-wrap; word-wrap: break-word; font-family: 'Courier New', Courier, monospace; }
-        /* PubMed results list */
-        .pubmed-list { list-style: none; margin: .5em 0 0 0; padding: 0; display: grid; gap: .75em; }
-        .pubmed-card { border: 1px solid var(--border); border-radius: 8px; padding: .75em .9em; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.03); }
-        .pubmed-title { font-weight: 600; margin: 0 0 .25em; color: #0f172a; }
-        .pubmed-meta { color: #555; font-size: 0.9em; }
-        .pubmed-card-footer { margin-top: .6em; text-align: right; }
-        .pubmed-article-link { display:inline-block; padding: .35em .6em; border: 1px solid var(--border); border-radius: 6px; text-decoration: none; color: #0c63bd; background:#f8fafc }
-        .pubmed-article-link:hover { background:#eef2f7 }
-        .pubmed-footer { margin-top: 1em; text-align: center; }
-        .pubmed-footer a { text-decoration: none; padding:.4em .75em; border-radius:6px; border:1px solid var(--border); color:#0c63bd; background:#fff }
-        .pubmed-footer a:hover { background:#f8fafc }
-        /* Domain list styling */
-        .domain-list { margin: .35em 0 0 0; padding-left: 1.1em; }
-        .domain-list li { margin: 0 0 .2em 0; }
-        /* PubMed accordion spacing */
-        .pubmed-accordion { margin-top: 1em; }
-        .pubmed-accordion .result-header, .pubmed-accordion .result-header h5 { color: #fff; }
-
-        /* Info icon for linking to methods */
-        .info-link { margin-left: 8px; color: inherit; text-decoration: none; font-size: 0.8em; opacity: 0.8; }
-        .info-link:hover { opacity: 1; }
-
-        /* Beauty overrides and enhancements */
-        :root{--primary:#0d6efd;--primary-dark:#0b5ed7;--text:#333;--muted:#6c757d;--bg:#f7f8fb;--card:#ffffff;--border:#e6e9ef;--ok:#28a745;--info:#17a2b8;--warn:#ffc107;--bad:#dc3545;--neutral:#6c757d}
-        body{background:linear-gradient(180deg,#f8fafc 0%,#eef2f7 100%)}
-        .container{max-width:980px;border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,.08)}
-        nav{background:#222;box-shadow:0 2px 6px rgba(0,0,0,.15);padding:.85em 1em}
-        nav{position:relative;display:flex;align-items:center;justify-content:center}
-        nav .logo{position:absolute;left:1rem;top:50%;transform:translateY(-50%);display:flex;align-items:center}
-        nav .logo img{height:40px;width:auto;filter:brightness(0) invert(1)}
-        nav .links{display:flex;align-items:center;gap:12px}
-        nav .links a{opacity:.9;font-weight:600;margin:0 12px;color:#f3f3f3;text-decoration:none}
-        nav .links a:hover{opacity:1}
-        .theme-toggle{position:absolute;right:1rem;top:50%;transform:translateY(-50%);background:transparent;border:1px solid var(--border);color:#f3f3f3;border-radius:999px;padding:.35em .7em;cursor:pointer}
-        .theme-toggle:hover{background:rgba(255,255,255,.06)}
-        .disclaimer{font-size:.85em;border-top:1px solid var(--border)}
-        #assessment-form{grid-template-columns:120px 1fr auto}
-        #assessment-form label{margin:0;font-weight:600;color:#495057}
-        input,button{border-radius:6px;border:1px solid #cfd4dc}
-        button{background:var(--primary);box-shadow:0 2px 8px rgba(13,110,253,.25)}
-        button:hover{background:var(--primary-dark)}
-        .result-header{border-radius:10px 10px 0 0}
-        .result-header h4{font-size:1.2em;letter-spacing:.2px}
-        .accordion-toggle .chevron{display:inline-block;margin-left:.4em;transition:transform .2s ease}
-        .accordion-toggle.open .chevron{transform:rotate(180deg)}
-        /* Rounded corners when collapsed; squared bottom when open */
-        .accordion-toggle{border-radius:10px}
-        .accordion-toggle.open{border-radius:10px 10px 0 0}
-        .result-block{border:1px solid var(--border);border-top:none;border-radius:0 0 10px 10px;box-shadow:0 8px 18px rgba(0,0,0,.04)}
-        .result-block h5{color:#334155;border-bottom:1px solid var(--border)}
-        .summary-block{background:#eef2f7;border:1px solid var(--border);border-radius:10px}
-        .summary-block ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.6em 1em}
-        .summary-block li{background:#fff;border:1px solid var(--border);padding:.5em .75em;border-radius:8px}
-        /* Checklist visual polish: colorblind-friendly checkbox icons instead of color-coding */
-        .checklist{margin:0}
-        .checklist li{padding:.5em .75em;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text)}
-        .checklist li.pass::before{content:'\2611';display:inline-block;width:1.25em;text-align:center;font-weight:700;margin-right:.4em;color:#000}
-        .checklist li.fail::before{content:'\2610';display:inline-block;width:1.25em;text-align:center;font-weight:700;margin-right:.4em;color:#000}
-        .checklist li .ic{display:inline-block;width:1.25em;text-align:center;font-weight:700;margin-right:.4em}
-        /* Override checklist for interactive mode */
-        .checklist.interactive li { cursor: pointer; user-select: none; transition: background-color 0.1s ease, border-color 0.1s ease; position: relative; }
-        .checklist.interactive li:hover { background-color: #e9ecef; }
-        .checklist.interactive li:hover::after { content: 'click for manual override'; position: absolute; right: 10px; font-size: 0.85em; color: var(--muted); font-style: italic; }
-        body.dark .checklist.interactive li:hover { background-color: #2c2c2c; }
-        .override-controls { text-align: center; }
-
-        /* Chips and controls */
-        .chip{display:inline-block;padding:.15em .5em;border-radius:999px;font-size:.8em;border:1px solid var(--border);background:#fff;color:#334155;margin-left:.5em}
-        .chip-ok{background:#ecfdf3;border-color:#bbf7d0;color:#166534}
-        .chip-warn{background:#fffbeb;border-color:#fde68a;color:#92400e}
-        .expand-controls{display:flex;gap:.5em;justify-content:flex-end;margin: .25em 0 1em}
-        .expand-controls .secondary{background:#fff;color:#334155;border:1px solid var(--border);padding:.4em .8em;border-radius:6px;cursor:pointer}
-        .expand-controls .secondary:hover{background:#f8fafc}
-        .section-block{border:1px solid var(--border);border-radius:10px;padding:1em;margin-bottom:2em;background:var(--card)}
-        .section-header-row{display:flex;align-items:center;justify-content:space-between;gap:1em;margin:0 0 .75em}
-        .section-header-row h4{margin:0}
-        .section-header-row .expand-controls{margin:0}
-        /* Compact status chip for headers */
-        .chip-status{display:inline-block;padding:.15em .55em;border-radius:999px;font-size:.82em;border:1px solid var(--border);font-weight:600;margin-left:.5em}
-        .status-eligible{background:#14532d;color:#e6faef;border-color:#14532d}
-        .status-likely-eligible{background:#0f4c5c;color:#e7f6fb;border-color:#0e7490}
-        .status-unlikely-eligible{background:#fef3c7;color:#7c2d12;border-color:#f59e0b}
-        .status-not-eligible{background:#7f1d1d;color:#fee2e2;border-color:#991b1b}
-        .status-unable-to-assess{background:#334155;color:#e2e8f0;border-color:#334155}
-        .status-error{background:#991b1b;color:#fee2e2;border-color:#991b1b}
-        .status-under-development{background:#334155;color:#e2e8f0;border-color:#334155}
-        .status-informational{background:#334155;color:#e2e8f0;border-color:#334155}
-        /* Professional-looking header colors */
-        .eligible{background:linear-gradient(135deg,#15803d,#22c55e); color:#fff}
-        .likely-eligible{background:linear-gradient(135deg,#0ea5e9,#06b6d4); color:#fff}
-        .unlikely-eligible{background:linear-gradient(135deg,#f59e0b,#fbbf24); color:#111827}
-        .not-eligible{background:linear-gradient(135deg,#dc2626,#ef4444); color:#fff}
-        .unable-to-assess{background:linear-gradient(135deg,#64748b,#94a3b8); color:#fff}
-        .error{background:linear-gradient(135deg,#b91c1c,#ef4444); color:#fff}
-        .under-development{background:linear-gradient(135deg,#64748b,#94a3b8); color:#fff}
-        .informational{background:linear-gradient(135deg,#64748b,#94a3b8); color:#fff}
-        /* Dark mode overrides */
-        body.dark{--bg:#111111;--card:#1b1b1b;--text:#e5e7eb;--muted:#a3a3a3;--border:#333333;--primary:#60a5fa;--primary-dark:#3b82f6}
-        body.dark{color:var(--text)}
-        body.dark a{color:#93c5fd}
-        body.dark nav .links a, body.dark .theme-toggle{color:#e5e7eb}
-        body.dark .container{box-shadow:0 6px 18px rgba(0,0,0,.5)}
-        body.dark .summary-block{background:#202020;border-color:#333333}
-        body.dark .summary-block li{background:#161616;border-color:#333333;color:var(--text)}
-        body.dark .result-block{border-color:#333333;background:#161616;box-shadow:0 8px 18px rgba(0,0,0,.5)}
-        /* Dark mode form controls */
-        body.dark input, body.dark select, body.dark textarea{background:#161616;border:1px solid #333333;color:var(--text)}
-        /* IGV's own inputs/selects (locus search, chromosome picker) stay in light theme */
-        body.dark #igv-container input, body.dark #igv-container select, body.dark #igv-container textarea{background:#fff;border:1px solid #ccc;color:#333}
-        body.dark .expand-controls .secondary{background:#161616;color:#e5e7eb;border:1px solid #333333}
-        body.dark .expand-controls .secondary:hover{background:#202020}
-        /* Dark mode checklist: neutral surface (from --card/--border/--text), white checkbox icons */
-        body.dark .checklist li.pass::before, body.dark .checklist li.fail::before{color:#fff}
-        /* Dark mode PubMed cards */
-        body.dark .pubmed-card{background:#161616;border-color:#333333}
-        body.dark .pubmed-title{color:#e5e7eb}
-        body.dark .pubmed-article-link{background:#161616;border-color:#333333;color:#93c5fd}
-        body.dark .pubmed-article-link:hover{background:#202020}
-        body.dark .pubmed-footer a{background:#161616;border-color:#333333;color:#93c5fd}
-        body.dark .pubmed-footer a:hover{background:#202020}
-        /* Dark mode API docs code blocks */
-        body.dark pre{background:#161616;border-color:#333333;color:#e5e7eb}
-        body.dark code{color:#e5e7eb}
-        body.dark pre code{color:#e5e7eb}
-        /* Dark mode navbar blends into background */
-        body.dark nav { background-color: #111111; }
-        /* IGV widget keeps its native light theme even in dark mode */
-        /* Loader spinner */
-        #loader{position:relative}
-        #loader:after{content:'';display:inline-block;width:1em;height:1em;margin-left:.5em;border:2px solid #cfd4dc;border-top-color:var(--primary);border-radius:50%;animation:spin 1s linear infinite;vertical-align:-2px}
-        @keyframes spin{to{transform:rotate(360deg)}}
-        /* Dark background override */
-        body.dark{ background: linear-gradient(180deg,#111111 0%, #0c0c0c 100%); }
-        @media (max-width: 640px){ 
-            #assessment-form{grid-template-columns:1fr}
-            .container{padding:1em; margin-top:1em}
-        }
-    </style>
+    <meta name="description" content="AVEC assesses a genetic variant for antisense oligonucleotide (ASO) therapy following the N1C VARIANT 2.0 guidelines.">
+    <link rel="icon" href="/static/favicon.ico">
+    <link rel="preload" href="/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/fonts/atkinson-hyperlegible-mono-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="/static/avec.css?v=12">
 </head>
 <body>
-    <nav>
-        <div class="logo">
-            <img src="/static/ukk_logo.png" alt="Universität zu Köln">
+    <script src="/static/avec.js?v=8"></script>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+        <div class="site-header__inner">
+            <a class="brand" href="/">
+                <img class="brand__uni" src="/static/uni_logo_header.png" alt="University of Cologne" width="128" height="48">
+                <span class="brand__name"><strong>AVEC</strong><span>Advanced Variant Eligibility Calculator</span></span>
+            </a>
+            <nav class="site-nav" aria-label="Main">
+                <a href="/">Tool</a>
+                <a href="/usage">Usage</a>
+                <a href="/guidelines">Guidelines</a>
+                <a href="/about">About &amp; methods</a>
+                <a href="/cite">How to cite</a>
+                <a href="/api_docs">API</a>
+            </nav>
+            <button id="theme-toggle" class="theme-toggle" type="button" aria-pressed="false" aria-label="Dark theme" title="Dark theme">
+                <svg class="icon-moon" viewBox="0 0 20 20" aria-hidden="true"><path d="M16.5 12.4A7 7 0 0 1 7.6 3.5a7 7 0 1 0 8.9 8.9z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+                <svg class="icon-sun" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="3.6" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M10 1.8v2.4M10 15.8v2.4M1.8 10h2.4M15.8 10h2.4M4.2 4.2l1.7 1.7M14.1 14.1l1.7 1.7M4.2 15.8l1.7-1.7M14.1 5.9l1.7-1.7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+            </button>
         </div>
-        <div class="links">
-            <a href="/">Tool</a>
-            <a href="/usage">Usage</a>
-            <a href="/about">About/Methods</a>
-            <a href="/cite">How to Cite</a>
-            <a href="/api_docs">API</a>
+    </header>
+
+    <main id="main" class="page">
+        <section class="tool-intro" aria-labelledby="tool-title">
+            <div class="tool-intro__head">
+                <div class="tool-intro__text">
+                    <p class="eyebrow">N1C VARIANT 2.0</p>
+                    <h1 id="tool-title"><span class="hl-1">Advanced Variant Eligibility Calculator</span></h1>
+                    <p class="lede">AVEC assesses a genetic variant using the N1C VARIANT 2.0 guidelines for exon skipping, splice correction, knockdown and wild-type upregulation, and links the evidence behind each result.</p>
+                </div>
+                <!-- The four ASO strategies AVEC assesses, one animated scene each; hero script below cycles them -->
+                <figure class="hero-figure">
+                    <svg viewBox="0 0 360 176" role="img" aria-label="Animation of the ASO strategies AVEC assesses: exon skipping, splice correction, knockdown, and wild-type upregulation through an upstream open reading frame, a natural antisense transcript or a poison exon.">
+
+                        <!-- Exon skipping: the ASO masks exon 3, splicing joins exon 2 to exon 4 -->
+                        <g class="hf-scene">
+                            <text class="hf-label" x="10" y="36">pre-mRNA</text>
+                            <line class="hf-intron" x1="6" y1="60" x2="354" y2="60"/>
+                            <rect class="hf-exon" x="10" y="49" width="44" height="22"/><text class="hf-num" x="32" y="64">1</text>
+                            <rect class="hf-exon" x="84" y="49" width="52" height="22"/><text class="hf-num" x="110" y="64">2</text>
+                            <g class="s1-target"><rect class="hf-exon hf-target" x="166" y="49" width="44" height="22"/><text class="hf-num" x="188" y="64">3</text></g>
+                            <rect class="hf-exon" x="240" y="49" width="52" height="22"/><text class="hf-num" x="266" y="64">4</text>
+                            <rect class="hf-exon" x="322" y="49" width="32" height="22"/><text class="hf-num" x="338" y="64">5</text>
+                            <g class="hf-pairs s1-pairs"><line x1="174" y1="32" x2="174" y2="46"/><line x1="181" y1="32" x2="181" y2="46"/><line x1="188" y1="32" x2="188" y2="46"/><line x1="195" y1="32" x2="195" y2="46"/><line x1="202" y1="32" x2="202" y2="46"/></g>
+                            <g class="hf-aso s1-aso"><text x="188" y="14">ASO</text><rect x="168" y="21" width="40" height="9"/></g>
+                            <path class="hf-splice s1-splice" d="M136 71 C 158 108, 218 108, 240 71" pathLength="1"/>
+                            <g class="s1-ma"><text class="hf-label" x="84" y="138">mRNA</text>
+                                <rect class="hf-exon" x="84" y="146" width="44" height="22"/><text class="hf-num" x="106" y="161">1</text>
+                                <rect class="hf-exon" x="131" y="146" width="52" height="22"/><text class="hf-num" x="157" y="161">2</text></g>
+                            <g class="s1-mb"><rect class="hf-exon" x="186" y="146" width="52" height="22"/><text class="hf-num" x="212" y="161">4</text>
+                                <rect class="hf-exon" x="241" y="146" width="32" height="22"/><text class="hf-num" x="257" y="161">5</text></g>
+                        </g>
+                        <!-- Splice correction: the variant creates a pseudo-exon; the ASO blocks it and normal splicing returns -->
+                        <g class="hf-scene">
+                            <text class="hf-label" x="10" y="36">pre-mRNA</text>
+                            <line class="hf-intron" x1="6" y1="60" x2="354" y2="60"/>
+                            <rect class="hf-exon" x="10" y="49" width="44" height="22"/><text class="hf-num" x="32" y="64">1</text>
+                            <rect class="hf-exon" x="84" y="49" width="52" height="22"/><text class="hf-num" x="110" y="64">2</text>
+                            <g class="s2-pseudo"><rect class="hf-pseudo" x="160" y="49" width="36" height="22"/><path class="hf-variant" d="M178 55l5 5-5 5-5-5z"/></g>
+                            <rect class="hf-exon" x="232" y="49" width="52" height="22"/><text class="hf-num" x="258" y="64">3</text>
+                            <rect class="hf-exon" x="312" y="49" width="42" height="22"/><text class="hf-num" x="333" y="64">4</text>
+                            <g class="s2-bad"><path class="hf-bad-arc" d="M136 71 C 144 92, 152 92, 160 71"/><path class="hf-bad-arc" d="M196 71 C 206 92, 222 92, 232 71"/></g>
+                            <g class="hf-pairs s2-pairs"><line x1="164" y1="32" x2="164" y2="46"/><line x1="171" y1="32" x2="171" y2="46"/><line x1="178" y1="32" x2="178" y2="46"/><line x1="185" y1="32" x2="185" y2="46"/><line x1="192" y1="32" x2="192" y2="46"/></g>
+                            <g class="hf-aso s2-aso"><text x="178" y="14">ASO</text><rect x="158" y="21" width="40" height="9"/></g>
+                            <path class="hf-splice s2-splice" d="M136 71 C 160 110, 208 110, 232 71" pathLength="1"/>
+                            <g class="s2-mrna"><text class="hf-label" x="80" y="138">mRNA</text>
+                                <rect class="hf-exon" x="80" y="146" width="44" height="22"/><text class="hf-num" x="102" y="161">1</text>
+                                <rect class="hf-exon" x="127" y="146" width="52" height="22"/><text class="hf-num" x="153" y="161">2</text>
+                                <g class="s2-mp"><rect class="hf-pseudo" x="182" y="146" width="36" height="22"/></g>
+                                <g class="s2-mshift"><rect class="hf-exon" x="221" y="146" width="52" height="22"/><text class="hf-num" x="247" y="161">3</text>
+                                    <rect class="hf-exon" x="276" y="146" width="42" height="22"/><text class="hf-num" x="297" y="161">4</text></g></g>
+                        </g>
+                        <!-- Knockdown: the ASO binds the variant transcript, RNase H1 cuts it, less protein is made -->
+                        <g class="hf-scene">
+                            <text class="hf-label" x="34" y="36">mRNA with the variant</text>
+                            <g class="s3-left"><circle class="hf-cap" cx="40" cy="60" r="5"/>
+                                <rect class="hf-exon" x="50" y="49" width="56" height="22"/><text class="hf-num" x="78" y="64">1</text>
+                                <rect class="hf-exon" x="109" y="49" width="64" height="22"/><text class="hf-num" x="141" y="64">2</text>
+                                <rect class="hf-exon" x="176" y="49" width="31" height="22"/></g>
+                            <g class="s3-right"><rect class="hf-exon" x="209" y="49" width="31" height="22"/>
+                                <rect class="hf-exon" x="243" y="49" width="60" height="22"/><text class="hf-num" x="273" y="64">4</text>
+                                <text class="hf-num hf-tail" x="327" y="64">AAAA</text></g>
+                            <g class="s3-whole"><rect class="hf-exon" x="176" y="49" width="64" height="22"/><text class="hf-num" x="194" y="64">3</text></g>
+                            <path class="hf-variant s3-variant" d="M222 55l5 5-5 5-5-5z"/>
+                            <g class="hf-pairs s3-pairs"><line x1="196" y1="32" x2="196" y2="46"/><line x1="202" y1="32" x2="202" y2="46"/><line x1="208" y1="32" x2="208" y2="46"/><line x1="214" y1="32" x2="214" y2="46"/><line x1="220" y1="32" x2="220" y2="46"/></g>
+                            <g class="hf-aso s3-aso"><text x="208" y="14">ASO</text><rect x="188" y="21" width="40" height="9"/></g>
+                            <g class="s3-rnase"><line class="hf-cut" x1="208" y1="78" x2="208" y2="90"/><text class="hf-label hf-center" x="208" y="104">RNase H1 cuts</text></g>
+                            <text class="hf-label" x="100" y="161">protein</text>
+                            <rect class="hf-bar" x="150" y="140" width="14" height="28"/>
+                            <rect class="hf-bar s3-bar2" x="170" y="140" width="14" height="28"/>
+                            <rect class="hf-bar s3-bar3" x="190" y="140" width="14" height="28"/>
+                        </g>
+                        <!-- WT upregulation, upstream ORF: the ASO masks the uORF, ribosomes reach the main ORF -->
+                        <g class="hf-scene">
+                            <text class="hf-label" x="10" y="98">mRNA from the healthy allele</text>
+                            <line class="hf-utr" x1="16" y1="60" x2="350" y2="60"/>
+                            <circle class="hf-cap" cx="16" cy="60" r="5"/>
+                            <g class="s4-uorf"><rect class="hf-uorf" x="62" y="51" width="36" height="18"/><text class="hf-num" x="80" y="63">uORF</text></g>
+                            <rect class="hf-exon" x="150" y="49" width="186" height="22"/><text class="hf-num" x="198" y="64">main ORF</text>
+                            <g class="hf-pairs s4-pairs"><line x1="68" y1="32" x2="68" y2="48"/><line x1="74" y1="32" x2="74" y2="48"/><line x1="80" y1="32" x2="80" y2="48"/><line x1="86" y1="32" x2="86" y2="48"/><line x1="92" y1="32" x2="92" y2="48"/></g>
+                            <g class="hf-aso s4-aso"><text x="80" y="14">ASO</text><rect x="60" y="21" width="40" height="9"/></g>
+                            <g class="s4-ribo"><ellipse class="hf-ribo" cx="22" cy="68" ry="8"/><ellipse class="hf-ribo" cx="22" cy="53" ry="6"/></g>
+                            <text class="hf-label" x="100" y="161">protein</text>
+                            <rect class="hf-bar" x="150" y="140" width="14" height="28"/>
+                            <rect class="hf-bar wt-bar2" x="170" y="140" width="14" height="28"/>
+                            <rect class="hf-bar wt-bar3" x="190" y="140" width="14" height="28"/>
+                        </g>
+                        <!-- WT upregulation, natural antisense transcript: the ASO removes the NAT RNA, the gene is expressed more -->
+                        <g class="hf-scene">
+                            <text class="hf-label" x="10" y="12">DNA of the healthy allele</text>
+                            <line class="hf-dna" x1="10" y1="30" x2="350" y2="30"/>
+                            <line class="hf-dna" x1="10" y1="38" x2="350" y2="38"/>
+                            <g class="s5-gene"><path class="hf-gene" d="M40 19.5h186l10 5-10 5H40z"/><text class="hf-num" x="133" y="27.5">gene</text></g>
+                            <path class="hf-nat" d="M320 38.5H190l-10 5 10 5h130z"/><text class="hf-num hf-nat-text" x="255" y="46.5">NAT</text>
+                            <path class="hf-nat-rna s5-rna" d="M318 72H192" pathLength="1"/>
+                            <text class="hf-label hf-end" x="184" y="76">antisense RNA</text>
+                            <g class="hf-pairs s5-pairs"><line x1="241" y1="75" x2="241" y2="85"/><line x1="248" y1="75" x2="248" y2="85"/><line x1="255" y1="75" x2="255" y2="85"/><line x1="262" y1="75" x2="262" y2="85"/><line x1="269" y1="75" x2="269" y2="85"/></g>
+                            <g class="hf-aso s5-aso"><rect x="235" y="86" width="40" height="9"/><text x="255" y="108">ASO</text></g>
+                            <text class="hf-label" x="100" y="161">protein</text>
+                            <rect class="hf-bar" x="150" y="140" width="14" height="28"/>
+                            <rect class="hf-bar wt-bar2" x="170" y="140" width="14" height="28"/>
+                            <rect class="hf-bar wt-bar3" x="190" y="140" width="14" height="28"/>
+                        </g>
+                        <!-- WT upregulation, poison exon: transcripts with it are lost to NMD; the ASO masks it, productive mRNA forms -->
+                        <g class="hf-scene">
+                            <text class="hf-label" x="10" y="36">pre-mRNA, healthy allele</text>
+                            <line class="hf-intron" x1="6" y1="60" x2="354" y2="60"/>
+                            <rect class="hf-exon" x="10" y="49" width="44" height="22"/><text class="hf-num" x="32" y="64">1</text>
+                            <rect class="hf-exon" x="84" y="49" width="52" height="22"/><text class="hf-num" x="110" y="64">2</text>
+                            <g class="s6-pe"><rect class="hf-poison" x="160" y="49" width="36" height="22"/><text class="hf-num hf-poison-text" x="178" y="64">PE</text></g>
+                            <rect class="hf-exon" x="232" y="49" width="52" height="22"/><text class="hf-num" x="258" y="64">3</text>
+                            <rect class="hf-exon" x="312" y="49" width="42" height="22"/><text class="hf-num" x="333" y="64">4</text>
+                            <g class="s6-bad"><path class="hf-bad-arc" d="M136 71 C 144 92, 152 92, 160 71"/><path class="hf-bad-arc" d="M196 71 C 206 92, 222 92, 232 71"/></g>
+                            <g class="hf-pairs s6-pairs"><line x1="164" y1="32" x2="164" y2="46"/><line x1="171" y1="32" x2="171" y2="46"/><line x1="178" y1="32" x2="178" y2="46"/><line x1="185" y1="32" x2="185" y2="46"/><line x1="192" y1="32" x2="192" y2="46"/></g>
+                            <g class="hf-aso s6-aso"><text x="178" y="14">ASO</text><rect x="158" y="21" width="40" height="9"/></g>
+                            <path class="hf-splice s6-splice" d="M136 71 C 160 110, 208 110, 232 71" pathLength="1"/>
+                            <text class="hf-label s6-mrna-label" x="80" y="138">mRNA</text>
+                            <g class="s6-nmd-row">
+                                <rect class="hf-exon" x="80" y="146" width="44" height="22"/><text class="hf-num" x="102" y="161">1</text>
+                                <rect class="hf-exon" x="127" y="146" width="52" height="22"/><text class="hf-num" x="153" y="161">2</text>
+                                <rect class="hf-poison" x="182" y="146" width="36" height="22"/><text class="hf-num hf-poison-text" x="200" y="161">PE</text>
+                                <rect class="hf-exon" x="221" y="146" width="52" height="22"/><text class="hf-num" x="247" y="161">3</text>
+                                <rect class="hf-exon" x="276" y="146" width="42" height="22"/><text class="hf-num" x="297" y="161">4</text></g>
+                            <text class="hf-label hf-nmd s6-nmd" x="326" y="161">NMD</text>
+                            <g class="s6-good-row">
+                                <rect class="hf-exon" x="80" y="146" width="44" height="22"/><text class="hf-num" x="102" y="161">1</text>
+                                <rect class="hf-exon" x="127" y="146" width="52" height="22"/><text class="hf-num" x="153" y="161">2</text>
+                                <rect class="hf-exon" x="182" y="146" width="52" height="22"/><text class="hf-num" x="208" y="161">3</text>
+                                <rect class="hf-exon" x="237" y="146" width="42" height="22"/><text class="hf-num" x="258" y="161">4</text></g>
+                        </g>
+                    </svg>
+                </figure>
+            </div>
+
+            <form id="assessment-form" class="query-form" novalidate autocomplete="off">
+                <div class="query-form__top">
+                    <label for="query" class="query-label">Variant</label>
+                    <span id="query-format" class="query-format" aria-live="polite"></span>
+                </div>
+                <div class="query-row">
+                    <div class="query-field">
+                        <input id="query" name="query" type="text" required maxlength="200" spellcheck="false" autocapitalize="off" autocorrect="off" aria-describedby="query-format">
+                        <div id="query-ghost" class="query-ghost" aria-hidden="true"></div>
+                        <button type="button" id="query-clear" class="query-clear" aria-label="Clear the variant" tabindex="-1">
+                            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                        </button>
+                        <div id="notation" class="notation" aria-hidden="true"><div class="notation__track"></div></div>
+                    </div>
+                    <button id="assess-btn" type="submit" class="btn btn--primary">Assess</button>
+                </div>
+                <div class="examples" role="group" aria-labelledby="examples-label">
+                    <span id="examples-label" class="examples__label">Examples</span>
+                </div>
+            </form>
+
+            <div class="notice">
+                <p class="notice__lead">We strongly recommend searching for existing ASOs before you assess.</p>
+                <p>Results depend on external databases and services and may be incomplete or unavailable. AVEC does not replace clinical judgement or a physician.</p>
+                <p class="notice__small">Enter variant descriptions only, never names or other data that can identify a patient.</p>
+            </div>
+        </section>
+
+        <section id="progress" class="progress" hidden aria-labelledby="progress-title">
+            <div class="progress__head">
+                <p id="progress-title" class="progress__title">Assessing <span id="progress-query" class="mono"></span></p>
+                <span id="progress-clock" class="progress__clock">0:00</span>
+            </div>
+            <div id="exon-track" class="exon-track" aria-hidden="true"></div>
+            <p id="progress-now" class="visually-hidden" aria-live="polite"></p>
+            <ol id="progress-steps" class="steps"></ol>
+            <p class="progress__note">Most assessments finish within a minute. Large genes take longer, and Ensembl or NCBI can be slow at busy times.</p>
+        </section>
+
+        <div id="results" hidden></div>
+    </main>
+
+    <div id="reassess-bar" class="reassess-bar" role="status" hidden>
+        <span class="spinner" aria-hidden="true"></span>
+        <span class="reassess-bar__text"></span>
+    </div>
+
+    <footer class="site-footer">
+        <div class="site-footer__inner">
+            <p class="site-footer__links">
+                <span><a href="https://uni-koeln.de/en/site-notice" target="_blank" rel="noopener noreferrer">Site notice</a> (<a href="https://uni-koeln.de/impressum" target="_blank" rel="noopener noreferrer" lang="de">Impressum</a>)</span>
+                <span><a href="https://uni-koeln.de/en/privacy-protection-statement" target="_blank" rel="noopener noreferrer">Privacy</a> (<a href="https://uni-koeln.de/datenschutz" target="_blank" rel="noopener noreferrer" lang="de">Datenschutz</a>)</span>
+                <a href="/about#data-processing">Data processing &amp; third-party services</a>
+            </p>
+            <p class="disclaimer">Disclaimer: This tool does not serve as Medical Advice. Although the content of these webpages may partly be provided by individuals in the medical profession, you acknowledge that provision of such content does not create a medical professional-patient relationship and does not constitute an opinion, medical advice, professional diagnosis, service or treatment of any condition. The access to general information is provided for educational purposes only, through this site and links to other sites. The content is not recommended or endorsed by any doctor or healthcare provider. The information and content provided are not substitutes for medical or professional care, and the information is not to be used in place of a visit, call, consultation or the advice of your physician or other healthcare provider. We are not liable or responsible for any advice, course of treatment, diagnosis or any other information, services or product obtained through this site.</p>
         </div>
-        <button id="theme-toggle" class="theme-toggle" aria-pressed="false" title="Toggle dark mode">🌙</button>
-    </nav>
-    <script>
-        (function(){
-            const key = 'theme';
-            const btn = document.getElementById('theme-toggle');
-            function apply(t){
-                const dark = (t === 'dark');
-                document.body.classList.toggle('dark', dark);
-                if (btn) {
-                    btn.textContent = dark ? '☀️' : '🌙';
-                    btn.setAttribute('aria-pressed', String(dark));
-                }
-            }
-            let saved = localStorage.getItem(key);
-            if (!saved) saved = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-            apply(saved);
-            btn && btn.addEventListener('click', () => {
-                const next = document.body.classList.contains('dark') ? 'light' : 'dark';
-                localStorage.setItem(key, next);
-                apply(next);
-            });
-        })();
-    </script>
-    <main class="container">
-<style>
-    .splice-prompt-buttons { 
-        margin-top: 1em; 
-        display: flex; 
-        gap: 10px; 
-    }
-    .splice-prompt-buttons button {
-        flex: 1;
-        color:white;
-        font-weight:bold;
-        cursor:pointer; 
-        border:none; 
-        width:auto;
-        padding:.75em 1.5em; 
-        border-radius: 4px; 
-        font-size: 0.9em;
-    }
-    .splice-prompt-buttons button.yes-btn { background-color: #28a745; }
-    .splice-prompt-buttons button.yes-btn:hover { background-color: #218838; }
-    .splice-prompt-buttons button.no-btn { background-color: #dc3545; }
-    .splice-prompt-buttons button.no-btn:hover { background-color: #c82333; }
-    .splice-prompt-buttons button.neutral-btn { background-color: #6c757d; }
-    .splice-prompt-buttons button.neutral-btn:hover { background-color: #5a6268; }
-
-    .warning { color: #dc3545; font-weight: 600; }
-</style>
-
-<h3>AVEC: Advanced Variant Eligibility Calculator</h3>
-<p>Enter a variant to assess its eligibility for ASO therapy. We strongly recommend to first <strong>search for already existing ASOs </strong>before using AVEC.</p>
-<p class="warning" style="color: var(--text);">Results depend on underlying data sources and external services and may be incomplete or unavailable. This tool does not replace clinical judgement or a physician.</p>
-<form id="assessment-form"> <label for="query">Variant:</label> <input id="query" required maxlength="200" placeholder="e.g., NM_015427.4:c.1054G>A"> <button type="submit">Assess</button> </form>
-<div id="loader">Assessing...</div>
-<div id="results"></div>
+    </footer>
 
 <script>
 // Escapes text from third-party sources (PubMed, TReXome, registries) before it goes into HTML
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-// NCBI E-utilities allow 3 requests/s per IP without an API key, and the literature boxes fire
-// several searches per result; queue them ~400 ms apart (rate-limited replies also lack CORS
-// headers, so the browser would report them as network errors)
-let ncbiQueue = Promise.resolve();
-function ncbiFetchJson(url) {
-    const result = ncbiQueue.then(async () => {
-        const resp = await fetch(url);
-        if (!resp.ok) throw new Error(`NCBI E-utilities HTTP ${resp.status}`);
-        return resp.json();
+// ======================================================================
+// Examples: each one verified to assess successfully, one per input format
+// ======================================================================
+const EXAMPLES = [
+    { query: 'NM_000350.3:c.2626C>T', format: 'RefSeq transcript' },
+    { query: 'PACS1 c.607C>T', format: 'Gene symbol' },
+    { query: 'NM_016589.4(TIMMDC1):c.597-1340A>G', format: 'RefSeq transcript with gene' },
+    { query: 'ENST00000375437.7:c.5645G>A', format: 'Ensembl transcript' },
+    { query: 'NC_000007.14:g.117639961C>T', format: 'Genomic position, GRCh38' },
+];
+
+// Mirrors parse_hgvs_query in avec.py: '<identifier>:<c./g./n./m./p. change>' or
+// '<identifier> <change>'. Returns the parts with their character offsets in `raw`, or null.
+function parseQuery(raw) {
+    const lead = raw.length - raw.trimStart().length;
+    const q = raw.trim();
+    let identifier, idStart, change, changeStart;
+    let m = /([^:]+):([cgnmp]\..*)/i.exec(q);
+    if (m) {
+        const idLead = m[1].length - m[1].trimStart().length;
+        identifier = m[1].trim();
+        idStart = m.index + idLead;
+        const changeLead = m[2].length - m[2].trimStart().length;
+        change = m[2].trim();
+        changeStart = m.index + m[1].length + 1 + changeLead;
+    } else {
+        m = /([A-Z0-9\-_()]+)\s+([cgnmp]\..*)/i.exec(q);
+        if (!m) return null;
+        identifier = m[1];
+        idStart = m.index;
+        change = m[2].trim();
+        changeStart = q.indexOf(m[2], m.index + m[1].length);
+    }
+    const segments = [];
+    const paren = /^([A-Za-z0-9_.]+)\(([A-Za-z0-9\-]+)\)$/.exec(identifier);
+    let kind;
+    if (identifier.startsWith('NM_') || identifier.startsWith('ENST')) {
+        kind = identifier.startsWith('NM_') ? 'RefSeq transcript' : 'Ensembl transcript';
+        const txText = paren ? paren[1] : identifier;
+        segments.push({ start: idStart, length: txText.length, label: identifier.startsWith('NM_') ? 'transcript' : 'Ensembl transcript', cls: 'seg-id' });
+        if (paren) {
+            segments.push({ start: idStart + txText.length, length: paren[2].length + 2, label: 'gene', cls: 'seg-gene' });
+            kind += ' with gene';
+        }
+    } else if (/^NC_/i.test(identifier)) {
+        kind = 'Genomic position';
+        segments.push({ start: idStart, length: identifier.length, label: 'chromosome', cls: 'seg-id' });
+    } else {
+        kind = 'Gene symbol';
+        segments.push({ start: idStart, length: identifier.length, label: 'gene', cls: 'seg-gene' });
+    }
+    const changeKinds = { c: 'coding change', g: 'genomic change', n: 'non-coding change', m: 'mitochondrial change', p: 'protein change' };
+    const changeLabel = changeKinds[change[0].toLowerCase()];
+    segments.push({ start: changeStart, length: change.length, label: changeLabel, cls: 'seg-change' });
+    segments.forEach(s => { s.start += lead; });
+    return { kind, changeLabel, segments };
+}
+
+// Colours the reference/alternate bases of a substitution (…C>T) as IGV does
+function baseClasses(text) {
+    const classes = new Array(text.length).fill('');
+    const m = /([ACGT]+)>([ACGT]+)$/.exec(text);
+    if (m) {
+        for (let i = m.index; i < text.length; i++) {
+            if ('ACGT'.includes(text[i])) classes[i] = 'nt-' + text[i];
+        }
+    }
+    return classes;
+}
+
+// ======================================================================
+// Query field: animated examples, notation annotation, live recognition
+// ======================================================================
+const queryInput = document.getElementById('query');
+const ghost = document.getElementById('query-ghost');
+const formatLabel = document.getElementById('query-format');
+const notationTrack = document.querySelector('#notation .notation__track');
+const examplesGroup = document.querySelector('.examples');
+
+const exampleButtons = EXAMPLES.map((ex, i) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'example';
+    btn.textContent = ex.query;
+    btn.title = `Use this example (${ex.format})`;
+    btn.addEventListener('click', () => {
+        queryInput.value = ex.query;
+        queryInput.removeAttribute('aria-invalid');
+        onQueryChanged();
+        nodReady();
+        queryInput.focus();
+        queryInput.setSelectionRange(ex.query.length, ex.query.length);
     });
-    ncbiQueue = result.catch(() => {}).then(() => new Promise(resolve => setTimeout(resolve, 400)));
+    examplesGroup.appendChild(btn);
+    return btn;
+});
+
+// Draws labelled brackets under the parts of the notation; positions are in `ch` of the
+// field's monospace font, so they sit under the characters they describe
+function drawNotation(parsed, scrollLeft = 0) {
+    notationTrack.innerHTML = '';
+    notationTrack.style.transform = scrollLeft ? `translateX(${-scrollLeft}px)` : '';
+    if (!parsed) return;
+    parsed.segments.forEach((seg, i) => {
+        const el = document.createElement('div');
+        el.className = `notation__seg ${seg.cls}`;
+        el.style.setProperty('--i', i);
+        el.style.left = `${seg.start}ch`;
+        el.style.width = `${seg.length}ch`;
+        el.innerHTML = `<span>${esc(seg.label)}</span>`;
+        notationTrack.appendChild(el);
+    });
+}
+
+// The Assess button nods once when the field holds a notation AVEC can read
+let wasReadable = false;
+function nodReady() {
+    const readable = !!parseQuery(queryInput.value);
+    if (readable && !wasReadable && !reducedMotion) {
+        const btn = document.getElementById('assess-btn');
+        btn.classList.remove('is-ready');
+        void btn.offsetWidth;  // restarts the animation
+        btn.classList.add('is-ready');
+    }
+    wasReadable = readable;
+}
+
+function setFormatLabel(text, isError = false) {
+    formatLabel.textContent = text;
+    formatLabel.classList.toggle('is-error', isError);
+}
+
+const clearBtn = document.getElementById('query-clear');
+clearBtn.addEventListener('click', () => {
+    queryInput.value = '';
+    queryInput.focus();
+    onQueryChanged();
+    wasReadable = false;
+});
+
+function onQueryChanged() {
+    const value = queryInput.value;
+    clearBtn.classList.toggle('is-visible', !!value);
+    clearBtn.tabIndex = value ? 0 : -1;
+    if (!value) {
+        queryInput.removeAttribute('aria-invalid');
+        if (document.activeElement === queryInput) exampleAnimator.hold();
+        else exampleAnimator.resume();
+        return;
+    }
+    exampleAnimator.pause();
+    const parsed = parseQuery(value);
+    // The annotation only lines up while the whole text is visible in the field
+    const fits = queryInput.scrollWidth <= queryInput.clientWidth + 1;
+    drawNotation(parsed && fits ? parsed : null);
+    if (parsed) {
+        queryInput.removeAttribute('aria-invalid');
+        setFormatLabel(`Recognized: ${parsed.kind}, ${parsed.changeLabel}`);
+    } else if (queryInput.getAttribute('aria-invalid') === 'true') {
+        setFormatLabel('Enter a transcript or gene, then a c. or g. change', true);
+    } else {
+        setFormatLabel(value.trim().length > 2 ? 'Add a c. or g. change, e.g. c.607C>T' : '');
+    }
+    exampleButtons.forEach(b => b.classList.toggle('is-current', b.textContent === value.trim()));
+}
+queryInput.addEventListener('input', () => { onQueryChanged(); nodReady(); });
+
+// Types the examples into the empty field one after another, labelling each part once typed
+const exampleAnimator = (() => {
+    let index = 0, timer = null, running = false;
+    const TYPE_MS = 55, HOLD_MS = 2600, ERASE_MS = 18, GAP_MS = 400;
+
+    function render(example, count, withCaret) {
+        const text = example.query.slice(0, count);
+        const classes = baseClasses(example.query);
+        let html = '';
+        for (let i = 0; i < text.length; i++) {
+            html += classes[i] ? `<span class="${classes[i]}">${esc(text[i])}</span>` : esc(text[i]);
+        }
+        ghost.innerHTML = html + (withCaret ? '<span class="caret"></span>' : '');
+    }
+
+    function highlight(i) {
+        exampleButtons.forEach((b, j) => b.classList.toggle('is-current', j === i));
+    }
+
+    // A line under the current example's chip fills up until the next example starts
+    function startTimer(i, ms) {
+        stopTimer();
+        const btn = exampleButtons[i];
+        btn.style.setProperty('--cycle', `${Math.round(ms)}ms`);
+        void btn.offsetWidth;  // restarts the animation
+        btn.classList.add('is-timing');
+    }
+    function stopTimer() {
+        exampleButtons.forEach(b => b.classList.remove('is-timing'));
+    }
+
+    function show(i) {
+        const example = EXAMPLES[i];
+        highlight(i);
+        setFormatLabel(`Example: ${example.format}`);
+        const len = example.query.length;
+        startTimer(i, reducedMotion ? 4000 : 250 + len * (TYPE_MS + 20) + HOLD_MS + len * ERASE_MS + GAP_MS);
+        if (reducedMotion) {
+            render(example, example.query.length, false);
+            drawNotation(parseQuery(example.query));
+            timer = setTimeout(() => next(), 4000);
+            return;
+        }
+        drawNotation(null);
+        let n = 0;
+        const type = () => {
+            if (!running) return;
+            n++;
+            render(example, n, true);
+            if (n < example.query.length) {
+                timer = setTimeout(type, TYPE_MS + Math.random() * 40);
+            } else {
+                drawNotation(parseQuery(example.query));
+                timer = setTimeout(erase, HOLD_MS);
+            }
+        };
+        const erase = () => {
+            if (!running) return;
+            drawNotation(null);
+            n--;
+            render(example, n, true);
+            if (n > 0) timer = setTimeout(erase, ERASE_MS);
+            else timer = setTimeout(() => next(), GAP_MS);
+        };
+        timer = setTimeout(type, 250);
+    }
+
+    function next() {
+        if (!running) return;
+        index = (index + 1) % EXAMPLES.length;
+        show(index);
+    }
+
+    return {
+        resume() {
+            if (running || queryInput.value) return;
+            running = true;
+            ghost.hidden = false;
+            show(index);
+        },
+        // While the empty field has focus, the current example stands still like a placeholder
+        hold() {
+            if (queryInput.value) return;
+            running = false;
+            clearTimeout(timer);
+            stopTimer();
+            const example = EXAMPLES[index];
+            ghost.hidden = false;
+            render(example, example.query.length, false);
+            drawNotation(parseQuery(example.query));
+            highlight(index);
+            setFormatLabel(`Example: ${example.format}`);
+        },
+        pause() {
+            running = false;
+            clearTimeout(timer);
+            stopTimer();
+            ghost.hidden = true;
+            ghost.innerHTML = '';
+            drawNotation(null);
+            exampleButtons.forEach(b => b.classList.remove('is-current'));
+        },
+    };
+})();
+
+// Hero figure: one scene per ASO strategy AVEC assesses (exon skipping, splice correction,
+// knockdown, and WT upregulation via uORF, NAT and poison exon), played in turn
+(() => {
+    const figure = document.querySelector('.hero-figure');
+    if (!figure) return;
+    const scenes = [...figure.querySelectorAll('.hf-scene')];
+    const SCENE_MS = 8500;
+    let current = 0, timer = null, onScreen = true;
+
+    function show(i) {
+        current = i;
+        clearTimeout(timer);
+        scenes.forEach(scene => scene.classList.remove('is-active'));
+        void figure.offsetWidth;  // restarts the scene's animations, also when it is shown again
+        scenes[i].classList.add('is-active');
+        if (reducedMotion || !onScreen || document.hidden) return;
+        timer = setTimeout(() => show((i + 1) % scenes.length), SCENE_MS);
+    }
+
+    // Rests while scrolled out of view or in a background tab
+    if ('IntersectionObserver' in window) {
+        new IntersectionObserver(([entry]) => {
+            const wasOnScreen = onScreen;
+            onScreen = entry.isIntersecting;
+            if (onScreen && !wasOnScreen) show(current);
+            if (!onScreen) clearTimeout(timer);
+        }).observe(figure);
+    }
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) clearTimeout(timer);
+        else if (onScreen) show(current);
+    });
+    show(0);
+})();
+
+queryInput.addEventListener('focus', () => { if (!queryInput.value) exampleAnimator.hold(); });
+queryInput.addEventListener('blur', () => { if (!queryInput.value) exampleAnimator.resume(); });
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) exampleAnimator.pause();
+    else if (!queryInput.value) onQueryChanged();
+});
+
+// ======================================================================
+// Progress: what the server reports it is doing, as a log and an exon track
+// ======================================================================
+// Order of the backend's progress steps (see _progress calls in avec.py)
+const STEP_ORDER = ['request', 'vep', 'gene', 'literature', 'n1c', 'gene_strategies', 'splice', 'exons', 'n1c_exons', 'cds', 'clinvar', 'domains', 'trexome', 'exon_pairs', 'trexome_gene', 'alternate'];
+const EXON_WIDTHS = [3, 6, 2, 4, 7, 3, 5, 2, 4, 6];
+
+const progress = (() => {
+    const panel = document.getElementById('progress');
+    const queryEl = document.getElementById('progress-query');
+    const clock = document.getElementById('progress-clock');
+    const nowEl = document.getElementById('progress-now');
+    const list = document.getElementById('progress-steps');
+    const track = document.getElementById('exon-track');
+    const bar = document.getElementById('reassess-bar');
+    const barText = bar.querySelector('.reassess-bar__text');
+    const spinner = bar.querySelector('.spinner');
+    let mode = null, startedAt = 0, tick = null, active = null, furthest = 0, barLead = '', flashTimer = null;
+
+    track.innerHTML = EXON_WIDTHS.map((w, i) => (i ? '<span class="intron"></span>' : '') + `<span class="exon" style="flex:${w} 1 0"></span>`).join('');
+    const exons = [...track.querySelectorAll('.exon')];
+
+    const fmtClock = ms => { const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+    const fmtDuration = ms => ms < 1000 ? '<1 s' : ms < 10000 ? `${(ms / 1000).toFixed(1)} s` : `${Math.round(ms / 1000)} s`;
+
+    function paintTrack(done) {
+        const filled = done ? exons.length : Math.min(exons.length - 1, Math.floor(furthest / STEP_ORDER.length * exons.length));
+        exons.forEach((ex, i) => {
+            ex.classList.toggle('is-done', i < filled);
+            ex.classList.toggle('is-active', !done && i === filled);
+        });
+    }
+
+    function closeActive() {
+        if (!active) return;
+        active.el.classList.remove('is-active');
+        active.el.classList.add('is-done');
+        active.el.querySelector('.step-time').textContent = fmtDuration(performance.now() - active.since);
+        active = null;
+    }
+
+    function updateClock() {
+        const now = performance.now();
+        clock.textContent = fmtClock(now - startedAt);
+        if (active) active.el.querySelector('.step-time').textContent = fmtDuration(now - active.since);
+    }
+
+    return {
+        start(query, how, lead) {
+            mode = how;
+            startedAt = performance.now();
+            furthest = 0;
+            active = null;
+            list.innerHTML = '';
+            if (mode === 'full') {
+                queryEl.textContent = query;
+                clock.textContent = '0:00';
+                panel.hidden = false;
+                paintTrack(false);
+            } else {
+                clearTimeout(flashTimer);
+                barLead = lead || 'Updating the assessment';
+                barText.innerHTML = `<strong>${esc(barLead)}</strong>`;
+                spinner.hidden = false;
+                bar.hidden = false;
+                document.getElementById('results').classList.add('is-stale');
+                document.getElementById('results').setAttribute('aria-busy', 'true');
+            }
+            this.step('request', 'Sending the variant to the AVEC server');
+            clearInterval(tick);
+            tick = setInterval(updateClock, 250);
+        },
+        step(id, label) {
+            closeActive();
+            const at = STEP_ORDER.indexOf(id);
+            if (at > furthest) furthest = at;
+            const li = document.createElement('li');
+            li.className = 'is-active';
+            li.innerHTML = `<span class="step-icon" aria-hidden="true"></span><span>${esc(label)}</span><span class="step-time"></span>`;
+            list.appendChild(li);
+            active = { el: li, since: performance.now() };
+            nowEl.textContent = label;
+            if (mode === 'full') paintTrack(false);
+            else barText.innerHTML = `<strong>${esc(barLead)}</strong>${esc(label)}`;
+        },
+        // Resolves once the panel is gone: after a full assessment the track completes, then
+        // the panel folds away
+        finish() {
+            closeActive();
+            clearInterval(tick);
+            paintTrack(true);
+            bar.hidden = true;
+            const results = document.getElementById('results');
+            results.classList.remove('is-stale');
+            results.removeAttribute('aria-busy');
+            if (mode !== 'full' || panel.hidden || reducedMotion || !panel.animate) {
+                panel.hidden = true;
+                return Promise.resolve();
+            }
+            return new Promise(resolve => setTimeout(() => {
+                const fold = panel.animate(
+                    [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(-8px) scale(.985)' }],
+                    { duration: 240, easing: 'cubic-bezier(.4,0,1,1)' });
+                fold.onfinish = () => { panel.hidden = true; resolve(); };
+            }, 320));
+        },
+        flash(message) {
+            // Brief message in the bottom bar, e.g. when a reassessment could not reach the server
+            barText.textContent = message;
+            spinner.hidden = true;
+            bar.hidden = false;
+            clearTimeout(flashTimer);
+            flashTimer = setTimeout(() => { bar.hidden = true; }, 6000);
+        },
+    };
+})();
+
+// Runs an assessment through /assess/stream, reporting progress as it arrives. Falls back to
+// /assess (no live progress) when the streaming endpoint isn't available on the server.
+async function requestAssessment(payload, onProgress) {
+    const options = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) };
+    const response = await fetch('/assess/stream', options);
+    if (response.status === 404 || response.status === 405 || !response.body) {
+        onProgress({ step: 'request', label: 'Waiting for the assessment (live progress is unavailable)' });
+        const plain = await fetch('/assess', options);
+        return plain.json();
+    }
+    if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        return body && body.classification ? body : { classification: 'Error', reason: `The server answered with HTTP ${response.status}.` };
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '', result = null;
+    for (;;) {
+        const { value, done } = await reader.read();
+        if (value) buffer += decoder.decode(value, { stream: true });
+        let newline;
+        while ((newline = buffer.indexOf('\n')) >= 0) {
+            const line = buffer.slice(0, newline).trim();
+            buffer = buffer.slice(newline + 1);
+            if (!line) continue;
+            const event = JSON.parse(line);
+            if (event.type === 'progress') onProgress(event);
+            else if (event.type === 'result') result = event.data;
+        }
+        if (done) break;
+    }
+    if (!result) throw new Error('The assessment stream ended without a result.');
     return result;
 }
 
-// --- Session Management Helpers ---
-function saveSession(data, query, spliceInput, moaInput, commentary, esOverrides, kdOverrides, wtOverrides, moiOverride, ssOverrides) {
-    if (data) sessionStorage.setItem('avec_data', JSON.stringify(data));
-    if (query) sessionStorage.setItem('avec_query', query);
-    if (spliceInput !== undefined) sessionStorage.setItem('avec_splice', spliceInput || '');
-    if (moaInput !== undefined) sessionStorage.setItem('avec_moa', moaInput || '');
-    if (commentary !== undefined) sessionStorage.setItem('avec_commentary', commentary || '');
-    if (esOverrides !== undefined) sessionStorage.setItem('avec_es_overrides', JSON.stringify(esOverrides));
-    if (kdOverrides !== undefined) sessionStorage.setItem('avec_kd_overrides', JSON.stringify(kdOverrides));
-    if (wtOverrides !== undefined) sessionStorage.setItem('avec_wt_overrides', JSON.stringify(wtOverrides));
-    if (moiOverride !== undefined) sessionStorage.setItem('avec_moi_override', JSON.stringify(moiOverride));
-    if (ssOverrides !== undefined) sessionStorage.setItem('avec_ss_overrides', JSON.stringify(ssOverrides));
+// ======================================================================
+// State, persisted in session storage so a reload restores the page
+// ======================================================================
+window.assessedQuery = '';
+window.userSpliceInput = null;       // 'yes' | 'no' | null
+window.userExonicPathogenic = null;  // 'yes' | 'no' | null
+window.userCommentary = '';
+window.userMoaInput = null;          // 'GoF' | 'LoF' | 'DN'
+window.userMoiOverride = null;
+window.userEsOverrides = {};         // Exon skipping
+window.userKdOverrides = {};         // Knockdown
+window.userWtOverrides = {};         // WT upregulation
+window.userSsOverrides = {};         // Splice correction
+// ClinGen's mode of inheritance from the query's first assessment; after a MOI override the
+// server reports the override instead, but the ClinGen default stays marked on its button
+window.clingenMoi = [];
+
+function resetUserInputs() {
+    window.userSpliceInput = null;
+    window.userExonicPathogenic = null;
+    window.userMoaInput = null;
+    window.userMoiOverride = null;
+    window.userCommentary = '';
+    window.userEsOverrides = {};
+    window.userKdOverrides = {};
+    window.userWtOverrides = {};
+    window.userSsOverrides = {};
 }
 
-function clearSessionUserInputs() {
-    sessionStorage.removeItem('avec_splice');
-    sessionStorage.removeItem('avec_moa');
-    sessionStorage.removeItem('avec_commentary');
-    sessionStorage.removeItem('avec_es_overrides');
-    sessionStorage.removeItem('avec_kd_overrides');
-    sessionStorage.removeItem('avec_wt_overrides');
-    sessionStorage.removeItem('avec_moi_override');
-    sessionStorage.removeItem('avec_ss_overrides');
-    sessionStorage.removeItem('avec_data'); // Clear old data on new submit
+function saveSession(data) {
+    try {
+        if (data) sessionStorage.setItem('avec_data', JSON.stringify(data));
+        sessionStorage.setItem('avec_query', window.assessedQuery || '');
+        sessionStorage.setItem('avec_splice', window.userSpliceInput || '');
+        sessionStorage.setItem('avec_exonic', window.userExonicPathogenic || '');
+        sessionStorage.setItem('avec_moa', window.userMoaInput || '');
+        sessionStorage.setItem('avec_commentary', window.userCommentary || '');
+        sessionStorage.setItem('avec_es_overrides', JSON.stringify(window.userEsOverrides || {}));
+        sessionStorage.setItem('avec_kd_overrides', JSON.stringify(window.userKdOverrides || {}));
+        sessionStorage.setItem('avec_wt_overrides', JSON.stringify(window.userWtOverrides || {}));
+        sessionStorage.setItem('avec_moi_override', JSON.stringify(window.userMoiOverride));
+        sessionStorage.setItem('avec_ss_overrides', JSON.stringify(window.userSsOverrides || {}));
+        sessionStorage.setItem('avec_clingen_moi', JSON.stringify(window.clingenMoi || []));
+    } catch (e) {
+        // Storage blocked or full: the page works, it just won't be restored on reload
+    }
 }
 
-// Restore session on load
 window.addEventListener('DOMContentLoaded', () => {
-    const savedQuery = sessionStorage.getItem('avec_query');
-    const savedData = sessionStorage.getItem('avec_data');
-    const savedSplice = sessionStorage.getItem('avec_splice');
-    const savedMoa = sessionStorage.getItem('avec_moa');
-    const savedCommentary = sessionStorage.getItem('avec_commentary');
-    const savedEsOverrides = sessionStorage.getItem('avec_es_overrides');
-    const savedKdOverrides = sessionStorage.getItem('avec_kd_overrides');
-    const savedWtOverrides = sessionStorage.getItem('avec_wt_overrides');
-    const savedMoiOverride = sessionStorage.getItem('avec_moi_override');
-    const savedSsOverrides = sessionStorage.getItem('avec_ss_overrides');
-
-    if (savedQuery) {
-        document.getElementById('query').value = savedQuery;
+    let savedData = null;
+    try {
+        const json = key => { const v = sessionStorage.getItem(key); return v ? JSON.parse(v) : null; };
+        window.assessedQuery = sessionStorage.getItem('avec_query') || '';
+        window.userSpliceInput = sessionStorage.getItem('avec_splice') || null;
+        window.userExonicPathogenic = sessionStorage.getItem('avec_exonic') || null;
+        window.userMoaInput = sessionStorage.getItem('avec_moa') || null;
+        window.userCommentary = sessionStorage.getItem('avec_commentary') || '';
+        window.userEsOverrides = json('avec_es_overrides') || {};
+        window.userKdOverrides = json('avec_kd_overrides') || {};
+        window.userWtOverrides = json('avec_wt_overrides') || {};
+        window.userMoiOverride = json('avec_moi_override');
+        window.userSsOverrides = json('avec_ss_overrides') || {};
+        window.clingenMoi = json('avec_clingen_moi') || [];
+        savedData = json('avec_data');
+    } catch (e) {
+        console.error('Failed to restore session data', e);
     }
-
-    // Restore global state
-    if (savedSplice) window.userSpliceInput = savedSplice;
-    if (savedMoa) window.userMoaInput = savedMoa;
-    if (savedCommentary) window.userCommentary = savedCommentary;
-    if (savedEsOverrides) window.userEsOverrides = JSON.parse(savedEsOverrides);
-    if (savedKdOverrides) window.userKdOverrides = JSON.parse(savedKdOverrides);
-    if (savedWtOverrides) window.userWtOverrides = JSON.parse(savedWtOverrides);
-    if (savedMoiOverride) window.userMoiOverride = JSON.parse(savedMoiOverride);
-    if (savedSsOverrides) window.userSsOverrides = JSON.parse(savedSsOverrides);
-
-    if (savedData) {
-        try {
-            const data = JSON.parse(savedData);
-            displayResults(data);
-        } catch (e) {
-            console.error("Failed to restore session data", e);
-        }
-    }
+    if (window.assessedQuery) queryInput.value = window.assessedQuery;
+    onQueryChanged();
+    if (!queryInput.value) exampleAnimator.resume();
+    if (savedData) displayResults(savedData);
 });
 
 // --- Helper to consolidate summary notes ---
@@ -326,38 +773,153 @@ function appendUserNotes(data) {
     if (!data.summary) return;
     let notes = [];
     if (data.summary.note) notes.push(data.summary.note);
-    
-    if (window.userMoaInput) {
-        notes.push(`User pathomechanism selection: ${window.userMoaInput}`);
-    }
-    
-    if (window.userMoiOverride && window.userMoiOverride.moi && window.userMoiOverride.moi.length > 0) {
-        const m = window.userMoiOverride.moi[0];
-        let choice = '';
-        if (m.includes('Autosomal dominant')) choice = 'AD';
-        else if (m.includes('Autosomal recessive')) choice = 'AR';
-        else if (m.includes('X-linked dominant')) choice = 'XD';
-        else if (m.includes('X-linked recessive')) choice = 'XR';
-        if (choice) notes.push(`User MOI override to: ${choice}.`);
-    }
-    
+    if (window.userMoaInput) notes.push(`User pathomechanism selection: ${window.userMoaInput}`);
+    const choice = moiChoice();
+    if (choice) notes.push(`User MOI override to: ${choice}.`);
     if (notes.length > 0) data.summary.note = [...new Set(notes)].join('<br>');
 }
 
-// Persist user selections across reassessments within the page lifecycle
-window.userSpliceInput = null; // 'yes' | 'no' | null
-window.userCommentary = '';
-window.userMoaInput = null;    // 'GoF' | 'LoF' | 'DN'
-window.userMoiOverride = null;
-window.userEsOverrides = {};   // For Exon Skipping
-window.userKdOverrides = {};   // For Knockdown
-window.userWtOverrides = {};   // For WT Upregulation
-window.userSsOverrides = {};   // For Splice Switching
+const MOI_PAYLOAD = {
+    AD: ['Autosomal dominant inheritance'],
+    AR: ['Autosomal recessive inheritance'],
+    XD: ['X-linked dominant inheritance'],
+    XR: ['X-linked recessive inheritance'],
+};
+function moiChoice() {
+    const m = window.userMoiOverride && window.userMoiOverride.moi && window.userMoiOverride.moi[0];
+    if (!m) return null;
+    if (m.includes('Autosomal dominant')) return 'AD';
+    if (m.includes('Autosomal recessive')) return 'AR';
+    if (m.includes('X-linked dominant')) return 'XD';
+    if (m.includes('X-linked recessive')) return 'XR';
+    return null;
+}
+// Button codes for a list of ClinGen terms (ClinGen uses only the autosomal ones directly)
+function moiCodes(terms) {
+    const codes = [];
+    for (const term of terms || []) {
+        const t = String(term).toLowerCase();
+        for (const [code, [name]] of Object.entries(MOI_PAYLOAD)) {
+            if (t.startsWith(name.toLowerCase().replace(' inheritance', '')) && !codes.includes(code)) codes.push(code);
+        }
+    }
+    return codes;
+}
+
+// ======================================================================
+// Assessment runs
+// ======================================================================
+let assessing = false;
+const assessBtn = document.getElementById('assess-btn');
+
+function setBusy(busy) {
+    assessing = busy;
+    assessBtn.disabled = busy;
+    assessBtn.classList.toggle('is-busy', busy);
+    assessBtn.innerHTML = busy ? '<span class="btn-spinner" aria-hidden="true"></span>Assessing' : 'Assess';
+}
+
+// A gentle shake for input AVEC can't use
+function shake(el) {
+    if (reducedMotion) return;
+    el.classList.remove('shake');
+    void el.offsetWidth;
+    el.classList.add('shake');
+}
+
+document.getElementById('assessment-form').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    if (assessing) return;
+    const queryVal = queryInput.value.trim();
+    if (!queryVal || !parseQuery(queryVal)) {
+        queryInput.setAttribute('aria-invalid', 'true');
+        setFormatLabel(queryVal ? 'AVEC can’t read this notation. Enter a transcript or gene, then a c. or g. change.' : 'Enter a variant, or pick one of the examples.', true);
+        shake(document.querySelector('.query-field'));
+        queryInput.focus();
+        return;
+    }
+
+    // A new query starts from the automatic assessment: reset all user inputs
+    window.assessedQuery = queryVal;
+    resetUserInputs();
+    try { sessionStorage.removeItem('avec_data'); } catch (err) { /* ignore */ }
+
+    const resultsDiv = document.getElementById('results');
+    resultsDiv.hidden = true;
+    resultsDiv.innerHTML = '';
+    window.igvState = null;
+    setBusy(true);
+    progress.start(queryVal, 'full');
+    document.getElementById('progress').scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' });
+
+    let data;
+    try {
+        data = await requestAssessment({ query: queryVal }, ev => progress.step(ev.step, ev.label));
+    } catch (error) {
+        console.error('Fetch Error:', error);
+        data = { classification: 'Error', reason: 'Could not connect to the server. Check your connection and try again.' };
+    }
+    window.clingenMoi = (data && data.summary && data.summary.moi) || [];
+    await progress.finish();
+    setBusy(false);
+    saveSession(data);
+    displayResults(data);
+    resultsDiv.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' });
+});
+
+// Where the reader is: the section holding `el` and its position on screen, so the re-rendered
+// results can be scrolled to put that section back in the same place
+function anchorFor(el) {
+    const block = el && el.closest('.strategy-block, .summary-block');
+    const toggle = block && block.querySelector('button.accordion-toggle');
+    const id = toggle ? toggle.id : (block && block.classList.contains('summary-block') ? 'summary-title' : null);
+    return id ? { id, top: block.getBoundingClientRect().top } : null;
+}
+
+// Re-runs the assessment of the current query with all user inputs (MOI/MoA, splice answers,
+// guideline overrides). The results stay in place, dimmed, while a bar shows progress.
+async function reassess(lead, from) {
+    const anchor = anchorFor(from);
+    if (assessing || !window.assessedQuery) return;
+    const payload = {
+        query: window.assessedQuery,
+        moa_user_input: window.userMoaInput,
+        splice_user_input: window.userSpliceInput,
+        exonic_pathogenic_user_input: window.userExonicPathogenic,
+        exon_skipping_overrides: window.userEsOverrides,
+        knockdown_overrides: window.userKdOverrides,
+        wt_upregulation_overrides: window.userWtOverrides,
+        splice_switching_overrides: window.userSsOverrides,
+        gene_characteristics_overrides: window.userMoiOverride,
+    };
+    setBusy(true);
+    progress.start(window.assessedQuery, 'update', lead);
+    let data = null;
+    try {
+        data = await requestAssessment(payload, ev => progress.step(ev.step, ev.label));
+    } catch (error) {
+        console.error('Fetch Error:', error);
+    }
+    progress.finish();
+    setBusy(false);
+    if (!data) {
+        progress.flash('Could not reach the server. Your previous results are unchanged.');
+        return;
+    }
+    // Tell the user the splice result reflects their answer
+    if (window.userSpliceInput && data.assessments && data.assessments.Splice_Switching && !Array.isArray(data.assessments.Splice_Switching)) {
+        const prefix = `<strong>Re-assessed based on user-provided '${window.userSpliceInput === 'yes' ? 'Yes' : 'No'}'.</strong>`;
+        data.assessments.Splice_Switching.reason = `${prefix} ${data.assessments.Splice_Switching.reason || ''}`;
+    }
+    appendUserNotes(data);
+    saveSession(data);
+    displayResults(data, { keepPlace: true, anchor });
+}
 
 // Toggle between the user's input transcript and the MANE Select/canonical alternative,
 // both of which are computed server-side in a single /assess response. Swapping is purely
 // client-side and symmetric, so clicking again reverts.
-window.toggleTranscriptView = function() {
+window.toggleTranscriptView = function () {
     const data = window.lastAssessData;
     if (!data || !data.transcript_info || !data.transcript_info.available_alternate || !data.alternative_result) return;
     const alt = data.alternative_result;
@@ -377,52 +939,192 @@ window.toggleTranscriptView = function() {
         },
         transcript_info: { ...data.transcript_info, selected: data.transcript_info.selected === 'input' ? 'default' : 'input' }
     };
-    displayResults(swapped);
+    saveSession(swapped);
+    displayResults(swapped, { keepPlace: true, anchor: anchorFor(document.querySelector('#results .transcript-switch')) });
 };
 
-document.getElementById('assessment-form').addEventListener('submit', async function(e) {
-    e.preventDefault();
-    const resultsDiv = document.getElementById('results');
-    const loader = document.getElementById('loader');
-    const queryVal = document.getElementById('query').value;
-    
-    resultsDiv.style.display = 'none';
-    resultsDiv.innerHTML = '';
-    loader.style.display = 'block';
-    
-    //query: reset stored user inputs and session storage for inputs
-    window.userSpliceInput = null;
-    window.userMoaInput = null;
-    window.userMoiOverride = null;
-    window.userCommentary = '';
-    window.userEsOverrides = {};
-    window.userKdOverrides = {};
-    window.userWtOverrides = {};
-    window.userSsOverrides = {};
-    clearSessionUserInputs();
-    
-    // Initial assessment payload contains only the query
-    const payload = { 
-        query: queryVal 
-        // splice_user_input is omitted, so backend defaults to DB check
-    }; 
-    
-    try {
-        const response = await fetch('/assess', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-        const data = await response.json();
-        
-        // Save to session
-        saveSession(data, queryVal, null, null, '', {}, {}, {}, null, {});
-        
-        displayResults(data);
-    } catch (error) {
-        console.error("Fetch Error:", error);
-        displayResults({ classification: "Error", reason: "Could not connect to the server." });
-    } finally {
-        loader.style.display = 'none';
+// ======================================================================
+// Result interactions (delegated, since results are re-rendered)
+// ======================================================================
+// Opens or closes an accordion; its content slides open/closed unless `animate` is false
+function setOpen(toggle, open, animate = true) {
+    toggle.classList.toggle('open', open);
+    toggle.setAttribute('aria-expanded', String(open));
+    const header = toggle.closest('.result-header');
+    if (header) header.classList.toggle('is-open', open);
+    const content = document.getElementById(toggle.getAttribute('aria-controls'));
+    if (!content) return;
+    content.getAnimations().forEach(a => a.cancel());
+    if (!animate || reducedMotion || !content.animate) {
+        content.hidden = !open;
+        return;
+    }
+    content.hidden = false;
+    const style = getComputedStyle(content);
+    const shut = { height: '0px', paddingTop: '0px', paddingBottom: '0px', opacity: 0 };
+    const full = { height: `${content.offsetHeight}px`, paddingTop: style.paddingTop, paddingBottom: style.paddingBottom, opacity: 1 };
+    content.style.overflow = 'hidden';
+    const duration = Math.min(420, 180 + content.offsetHeight / 4);
+    const anim = content.animate(open ? [shut, full] : [full, shut],
+        { duration: open ? duration : duration * 0.8, easing: open ? 'cubic-bezier(.2,.7,.2,1)' : 'cubic-bezier(.4,0,1,1)' });
+    anim.onfinish = () => {
+        content.style.overflow = '';
+        if (!toggle.classList.contains('open')) content.hidden = true;
+    };
+}
+
+function markOverride(li) {
+    const isPass = li.classList.contains('pass');
+    li.classList.toggle('pass', !isPass);
+    li.classList.toggle('fail', isPass);
+    li.setAttribute('aria-checked', String(!isPass));
+    li.classList.remove('just-toggled');
+    void li.offsetWidth;  // restarts the pop
+    li.classList.add('just-toggled');
+    const form = li.closest('.override-form');
+    if (!form) return;
+    // Preview: the passed count and meter follow the checks; the apply button says how many changed
+    const items = [...form.querySelectorAll('li[data-check-name]')];
+    const passed = items.filter(item => item.classList.contains('pass')).length;
+    const changed = items.filter(item => String(item.classList.contains('pass')) !== item.dataset.shownPassed).length;
+    const block = form.closest('.result-block');
+    const chip = block && block.querySelector('h5 .chip');
+    if (chip) {
+        chip.textContent = `${passed}/${items.length} passed`;
+        chip.classList.toggle('chip-ok', passed === items.length);
+        chip.classList.toggle('chip-warn', passed !== items.length);
+        chip.classList.remove('bump');
+        void chip.offsetWidth;
+        chip.classList.add('bump');
+    }
+    const meter = block && block.querySelector('.checks-meter span');
+    if (meter) meter.style.setProperty('--p', items.length ? passed / items.length : 0);
+    const controls = document.getElementById(form.id.replace('override-form-', 'override-controls-'));
+    if (controls) {
+        controls.hidden = changed === 0;
+        controls.querySelector('.override-count').textContent = `${changed} change${changed === 1 ? '' : 's'} not applied yet`;
+    }
+}
+
+document.getElementById('results').addEventListener('click', function (e) {
+    const toggle = e.target.closest('button.accordion-toggle');
+    if (toggle) {
+        setOpen(toggle, !toggle.classList.contains('open'));
+        return;
+    }
+    const jump = e.target.closest('.overview__row');
+    if (jump) {
+        const target = document.getElementById(jump.dataset.target);
+        if (target) {
+            setOpen(target, true);
+            target.closest('.strategy-block').scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' });
+            target.focus({ preventScroll: true });
+        }
+        return;
+    }
+    const li = e.target.closest('.checklist.interactive li');
+    if (li && !e.target.closest('a')) {
+        markOverride(li);
+        return;
+    }
+    const btn = e.target.closest('button[data-action]');
+    if (!btn) return;
+    const value = btn.dataset.value;
+    switch (btn.dataset.action) {
+        case 'splice':
+            window.userSpliceInput = value;
+            reassess(`Reassessing with your splice answer (${value === 'yes' ? 'Yes' : 'No'}).`, btn);
+            break;
+        case 'exonic':
+            window.userExonicPathogenic = value;
+            reassess('Reassessing with your answer on exonic pathogenicity.', btn);
+            break;
+        case 'moa':
+            window.userMoaInput = value;
+            reassess(`Reassessing as ${value}.`, btn);
+            break;
+        case 'moi':
+            window.userMoiOverride = { moi: MOI_PAYLOAD[value] || [] };
+            reassess(`Reassessing with mode of inheritance ${value}.`, btn);
+            break;
+        case 'commit-overrides': {
+            const strategy = btn.dataset.strategy;
+            const form = document.getElementById(`override-form-${btn.dataset.formId}`);
+            if (!form) return;
+            // Keep the strategy's existing overrides (e.g. those committed on another exon-skipping
+            // option) and record only checks whose state now differs from the automatic result
+            const existing = {
+                Exon_Skipping: window.userEsOverrides,
+                Knockdown: window.userKdOverrides,
+                WT_Upregulation: window.userWtOverrides,
+                Splice_Switching: window.userSsOverrides
+            }[strategy] || {};
+            const overrides = { ...existing };
+            form.querySelectorAll('li[data-check-name]').forEach(item => {
+                const checkName = item.dataset.checkName;
+                const isPassed = item.classList.contains('pass');
+                if (String(isPassed) === item.dataset.originalPassed) delete overrides[checkName];
+                else overrides[checkName] = isPassed;
+            });
+            if (strategy === 'Exon_Skipping') window.userEsOverrides = overrides;
+            if (strategy === 'Knockdown') window.userKdOverrides = overrides;
+            if (strategy === 'WT_Upregulation') window.userWtOverrides = overrides;
+            if (strategy === 'Splice_Switching') window.userSsOverrides = overrides;
+            reassess('Reassessing with your guideline overrides.', btn);
+            break;
+        }
+        case 'switch-transcript':
+            window.toggleTranscriptView();
+            break;
+        case 'expand-all': {
+            const container = document.getElementById(btn.dataset.target);
+            const toggles = [...container.querySelectorAll('button.accordion-toggle')];
+            const expanding = toggles.some(t => !t.classList.contains('open'));
+            toggles.forEach(t => setOpen(t, expanding));
+            btn.textContent = expanding ? 'Collapse all' : 'Expand all';
+            break;
+        }
+        case 'download-report':
+            downloadReport();
+            confirmOnButton(btn, 'Report downloaded');
+            break;
+        case 'copy-query':
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(window.assessedQuery || '')
+                    .then(() => confirmOnButton(btn, 'Copied'), () => confirmOnButton(btn, 'Copy not allowed'));
+            }
+            break;
     }
 });
 
+// Guideline checks are checkboxes for keyboard users too
+document.getElementById('results').addEventListener('keydown', function (e) {
+    const li = e.target.closest('.checklist.interactive li');
+    if (li && (e.key === ' ' || e.key === 'Enter')) {
+        e.preventDefault();
+        markOverride(li);
+    }
+});
+
+// ======================================================================
+// IGV genome browser (loaded on first use)
+// ======================================================================
+let igvLoading = null;
+function loadIGV() {
+    if (window.igv) return Promise.resolve();
+    if (!igvLoading) {
+        igvLoading = new Promise((resolve, reject) => {
+            const s = document.createElement('script');
+            s.src = 'https://cdn.jsdelivr.net/npm/igv@2.15.5/dist/igv.min.js';
+            s.integrity = 'sha384-ODTJrRAKVek3XddJWCIIVSUvxZAiuZAQq05z3zN7HbqOi9ZN6WV2bUd+jbcDAwwL';
+            s.crossOrigin = 'anonymous';
+            s.onload = resolve;
+            s.onerror = () => { igvLoading = null; reject(new Error('IGV could not be loaded')); };
+            document.head.appendChild(s);
+        });
+    }
+    return igvLoading;
+}
 
 // Adds a draggable resize handle to the bottom of every track's viewport so
 // individual IGV tracks can be expanded/collapsed vertically by the user.
@@ -468,388 +1170,222 @@ function installTrackResizeHandles(browser) {
     }
 }
 
-function renderIGV(containerId, data) {
-    const container = document.getElementById(containerId);
+function renderIGV(container, data) {
     if (!container || !data || !data.locus) {
         console.error("IGV container or data is missing, cannot render viewer.");
         return;
     }
-
-    container.style.display = 'block';
-    container.innerHTML = '';
-    const options = { genome: "hg38", locus: data.locus };
-
-    igv.createBrowser(container, options)
+    container.hidden = false;
+    container.innerHTML = `<div class="igv-placeholder">${SKELETON('Loading the genome browser…')}</div>`;
+    loadIGV().then(() => igv.createBrowser(container, { genome: "hg38", locus: data.locus }))
         .then(function (browser) {
+            const placeholder = container.querySelector('.igv-placeholder');
+            if (placeholder) placeholder.remove();
             installTrackResizeHandles(browser);
             const tracksToLoad = [];
             if (data.variantTrack && data.variantTrack.features) {
                 tracksToLoad.push({ type: "annotation", name: data.variantTrack.name, features: data.variantTrack.features, color: "red", displayMode: "EXPANDED", height: 35 });
             }
             if (data.domainTrack && data.domainTrack.features) {
-                tracksToLoad.push({ type: "annotation", name: data.domainTrack.name, features: data.domainTrack.features, color: "#D46A6A", displayMode: "EXPANDED", height: 35 });
+                tracksToLoad.push({ type: "annotation", name: data.domainTrack.name, features: data.domainTrack.features, color: "#ea564f", displayMode: "EXPANDED", height: 35 });
             }
             if (tracksToLoad.length > 0) {
                 browser.loadTrackList(tracksToLoad).then(() => installTrackResizeHandles(browser));
             }
+        })
+        .catch(err => {
+            console.error(err);
+            container.innerHTML = '<p class="note" style="padding:1em">The genome browser could not be loaded.</p>';
         });
 }
-// --- HELPER FUNCTION FOR SPLICE VALIDATION ---
-async function reassessWithSpliceInput(spliceInput) {
-    const resultsDiv = document.getElementById('results');
-    const loader = document.getElementById('loader');
-    const queryVal = document.getElementById('query').value;
-    
-    resultsDiv.style.display = 'none';
-    resultsDiv.innerHTML = '';
-    loader.style.display = 'block';
 
-    // Create the payload with the 'splice_user_input' flag
-    const payload = {
-        query: queryVal,
-        splice_user_input: spliceInput, // 'yes' or 'no'
-        // include previously chosen MoA if available to avoid losing state
-        moa_user_input: window.userMoaInput,
-        splice_switching_overrides: window.userSsOverrides
-    };
+// ======================================================================
+// PubMed (searched from the browser via NCBI E-utilities)
+// ======================================================================
+// NCBI E-utilities allow 3 requests/s per IP without an API key, and the literature boxes fire
+// several searches per result; queue them ~400 ms apart (rate-limited replies also lack CORS
+// headers, so the browser would report them as network errors)
+let ncbiQueue = Promise.resolve();
+function ncbiFetchJson(url) {
+    const result = ncbiQueue.then(async () => {
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error(`NCBI E-utilities HTTP ${resp.status}`);
+        return resp.json();
+    });
+    ncbiQueue = result.catch(() => {}).then(() => new Promise(resolve => setTimeout(resolve, 400)));
+    return result;
+}
 
+// Rendered lists by query, so reassessments don't search PubMed again
+const pubmedCache = new Map();
+async function loadPubmed(container) {
+    const q = container.dataset.query;
+    if (!q) return;
+    if (pubmedCache.has(q)) { container.innerHTML = pubmedCache.get(q); return; }
+    const E = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/';
     try {
-        const response = await fetch('/assess', { 
-            method: 'POST', 
-            headers: { 'Content-Type': 'application/json' }, 
-            body: JSON.stringify(payload) 
-        });
-        const data = await response.json();
-
-        // Add a note to the re-assessed data so the user knows what happened
-        if (data.assessments && data.assessments.Splice_Switching) {
-            const originalReason = data.assessments.Splice_Switching.reason || "";
-            let prefix = (spliceInput === 'yes') ? 
-                "<strong>Re-assessed based on user-provided 'Yes'.</strong>" : 
-                "<strong>Re-assessed based on user-provided 'No'.</strong>";
-            data.assessments.Splice_Switching.reason = `${prefix} ${originalReason}`;
+        const esJson = await ncbiFetchJson(`${E}esearch.fcgi?db=pubmed&retmode=json&retmax=20&term=${encodeURIComponent(q)}`);
+        const ids = (esJson.esearchresult && esJson.esearchresult.idlist) || [];
+        let out = '<p class="note">No PubMed results found.</p>';
+        if (ids.length) {
+            const sumJson = await ncbiFetchJson(`${E}esummary.fcgi?db=pubmed&retmode=json&id=${ids.join(',')}`);
+            const result = sumJson.result || {};
+            out = '<ul class="pubmed-list">';
+            for (const uid of (result.uids || ids)) {
+                const rec = result[uid];
+                if (!rec) continue;
+                const journal = rec.fulljournalname || rec.source || '';
+                const pubdate = rec.pubdate || rec.epubdate || '';
+                const authors = Array.isArray(rec.authors) ? rec.authors.slice(0, 3).map(a => a.name).join(', ') : '';
+                const meta = [authors, journal, pubdate].filter(Boolean).map(esc).join('. ');
+                out += `<li class="pubmed-card"><p class="pubmed-title"><a href="https://pubmed.ncbi.nlm.nih.gov/${encodeURIComponent(uid)}/" target="_blank" rel="noopener noreferrer">${esc(rec.title || '(no title)')}</a></p>` +
+                       `<div class="pubmed-meta">${meta}</div></li>`;
+            }
+            out += '</ul>';
         }
-        // persist the user's splice selection
-        window.userSpliceInput = spliceInput;
-        
-        appendUserNotes(data);
-        // Save session state
-        saveSession(data, queryVal, spliceInput, window.userMoaInput,
-            document.getElementById('user-commentary')?.value,
-            window.userEsOverrides, window.userKdOverrides, window.userWtOverrides,
-            window.userMoiOverride, window.userSsOverrides
-        );
-
-        displayResults(data);
-    } catch (error) {
-        console.error("Fetch Error:", error);
-        displayResults({ classification: "Error", reason: "Could not connect to the server." });
-    } finally {
-        loader.style.display = 'none';
+        pubmedCache.set(q, out);
+        container.innerHTML = out;
+        container.classList.add('is-loaded');
+    } catch (e) {
+        container.innerHTML = '<p class="note">PubMed results could not be loaded. Use the link below to search PubMed directly.</p>';
     }
 }
 
-// --- HELPER FUNCTION FOR MoA SELECTION ---
-async function reassessWithMoaInput(moaChoice) {
-    const resultsDiv = document.getElementById('results');
-    const loader = document.getElementById('loader');
-    const queryVal = document.getElementById('query').value;
-    
-    resultsDiv.style.display = 'none';
-    resultsDiv.innerHTML = '';
-    loader.style.display = 'block';
+// Placeholder lines that shimmer while something loads
+const SKELETON = label => `<div class="skeleton" role="status"><span class="visually-hidden">${esc(label)}</span>` +
+    [92, 56, 86, 44, 90, 62].map(w => `<span class="skeleton-line" style="width:${w}%"></span>`).join('') + '</div>';
 
-    const payload = {
-        query: queryVal,
-        moa_user_input: moaChoice, // 'GoF' or 'LoF'
-        splice_user_input: window.userSpliceInput,
-        exon_skipping_overrides: window.userEsOverrides,
-        knockdown_overrides: window.userKdOverrides,
-        wt_upregulation_overrides: window.userWtOverrides,
-        splice_switching_overrides: window.userSsOverrides,
-        gene_characteristics_overrides: window.userMoiOverride
-    };
-
-    try {
-        const response = await fetch('/assess', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        const data = await response.json();
-
-        // persist the user's MoA selection
-        window.userMoaInput = moaChoice;
-        
-        appendUserNotes(data);
-        // Save session state
-        saveSession(data, queryVal, window.userSpliceInput, moaChoice,
-            document.getElementById('user-commentary')?.value,
-            window.userEsOverrides, window.userKdOverrides, window.userWtOverrides,
-            window.userMoiOverride, window.userSsOverrides
-        );
-
-        displayResults(data);
-    } catch (error) {
-        console.error('Fetch Error:', error);
-        displayResults({ classification: 'Error', reason: 'Could not connect to the server.' });
-    } finally {
-        loader.style.display = 'none';
-    }
+function pubmedBody(query, resultsId, queryLabel = 'Query') {
+    const pmUrl = 'https://pubmed.ncbi.nlm.nih.gov/?term=' + encodeURIComponent(query);
+    return `<p class="pubmed-query"><strong>${esc(queryLabel)}:</strong> <code>${esc(query)}</code></p>
+            <div id="${resultsId}" class="pubmed-context" data-query="${esc(query)}">${SKELETON('Loading PubMed results…')}</div>
+            <p class="pubmed-footer"><a href="${pmUrl}" target="_blank" rel="noopener noreferrer">Open all results on PubMed</a></p>
+            <p class="note">Searched with NCBI E-utilities.</p>`;
 }
 
-// --- HELPER FUNCTION FOR MOI OVERRIDE ---
-async function reassessWithMoiOverride(moiChoice) {
-    const resultsDiv = document.getElementById('results');
-    const loader = document.getElementById('loader');
-    const queryVal = document.getElementById('query').value;
-    
-    resultsDiv.style.display = 'none';
-    resultsDiv.innerHTML = '';
-    loader.style.display = 'block';
+// ======================================================================
+// Result rendering
+// ======================================================================
+const STRATEGY_NAMES = {
+    Exon_Skipping: 'Exon skipping',
+    Splice_Switching: 'Splice correction',
+    Knockdown: 'Knockdown',
+    WT_Upregulation: 'WT upregulation',
+    N1C_Registry_Check: 'N1C registry',
+    N1C_Assessed_Variants: 'N1C assessed variants',
+    N1C_Gene_Knockdown: 'N1C gene knockdown',
+    General_Assessment: 'General assessment',
+};
+const strategyName = s => STRATEGY_NAMES[s] || (s.charAt(0) + s.slice(1).replace(/_/g, ' ').toLowerCase());
 
-    // The backend expects a list of full strings
-    const moiMap = {
-        'AD': ['Autosomal dominant inheritance'],
-        'AR': ['Autosomal recessive inheritance'],
-        'XD': ['X-linked dominant inheritance'],
-        'XR': ['X-linked recessive inheritance']
-    };
-    const moiPayload = moiMap[moiChoice] || [];
-
-    // Update global state
-    window.userMoiOverride = { moi: moiPayload };
-
-    const payload = {
-        query: queryVal,
-        moa_user_input: window.userMoaInput,
-        splice_user_input: window.userSpliceInput,
-        exon_skipping_overrides: window.userEsOverrides,
-        knockdown_overrides: window.userKdOverrides,
-        wt_upregulation_overrides: window.userWtOverrides,
-        splice_switching_overrides: window.userSsOverrides,
-        gene_characteristics_overrides: window.userMoiOverride
-    };
-
-    try {
-        const response = await fetch('/assess', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        const data = await response.json();
-        
-        appendUserNotes(data);
-        saveSession(data, queryVal, window.userSpliceInput, window.userMoaInput, window.userCommentary, window.userEsOverrides, window.userKdOverrides, window.userWtOverrides, window.userMoiOverride, window.userSsOverrides);
-        displayResults(data);
-    } catch (error) {
-        console.error('Fetch Error:', error);
-    } finally {
-        loader.style.display = 'none';
-    }
+// Classification -> colour tone: green eligible, blue likely, yellow unlikely, red not eligible,
+// grey unable/informational
+function toneFor(classification) {
+    const c = String(classification || '').toLowerCase();
+    if (c === 'eligible') return 'good';
+    if (c === 'likely eligible' || c === 'potential possibilities identified') return 'fair';
+    if (c === 'unlikely eligible' || c === 'no potential possibilities identified') return 'caution';
+    if (c === 'not eligible' || c === 'error') return 'bad';
+    return 'muted';
 }
 
-// --- HELPER FUNCTION FOR GUIDELINE OVERRIDES ---
-async function reassessWithGuidelineOverrides(strategy, overrides) {
-    const resultsDiv = document.getElementById('results');
-    const loader = document.getElementById('loader');
-    const queryVal = document.getElementById('query').value;
+const COPY_ICON = '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10.5 3.5V2H2v8.5h1.5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>';
+const CHECK_ICON = '<svg class="draw-check" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" pathLength="1"/></svg>';
 
-    resultsDiv.style.display = 'none';
-    resultsDiv.innerHTML = '';
-    loader.style.display = 'block';
-
-    // Update global state
-    if (strategy === 'Exon_Skipping') window.userEsOverrides = overrides;
-    if (strategy === 'Knockdown') window.userKdOverrides = overrides;
-    if (strategy === 'WT_Upregulation') window.userWtOverrides = overrides;
-    if (strategy === 'Splice_Switching') window.userSsOverrides = overrides;
-
-    const payload = {
-        query: queryVal,
-        moa_user_input: window.userMoaInput,
-        splice_user_input: window.userSpliceInput,
-        exon_skipping_overrides: window.userEsOverrides,
-        knockdown_overrides: window.userKdOverrides,
-        wt_upregulation_overrides: window.userWtOverrides,
-        splice_switching_overrides: window.userSsOverrides,
-        gene_characteristics_overrides: window.userMoiOverride
-    };
-
-    try {
-        const response = await fetch('/assess', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-        const data = await response.json();
-        appendUserNotes(data);
-        saveSession(data, queryVal, window.userSpliceInput, window.userMoaInput, window.userCommentary, window.userEsOverrides, window.userKdOverrides, window.userWtOverrides, window.userMoiOverride, window.userSsOverrides);
-        displayResults(data);
-    } catch (error) {
-        console.error('Fetch Error:', error);
-    } finally {
-        loader.style.display = 'none';
-    }
+// Swaps a button's content for a confirmation (drawn check + text) for a moment
+function confirmOnButton(btn, text) {
+    if (!btn.dataset.idle) btn.dataset.idle = btn.innerHTML;
+    clearTimeout(btn._confirmTimer);
+    btn.innerHTML = `${CHECK_ICON}<span>${esc(text)}</span>`;
+    btn.classList.add('is-confirmed');
+    btn._confirmTimer = setTimeout(() => {
+        btn.innerHTML = btn.dataset.idle;
+        btn.classList.remove('is-confirmed');
+    }, 2000);
 }
 
-// --- HELPER FOR EXONIC PATHOGENICITY ---
-async function reassessWithExonicPathogenicityInput(pathogenicityChoice) {
-    const resultsDiv = document.getElementById('results');
-    const loader = document.getElementById('loader');
-    const queryVal = document.getElementById('query').value;
+const EXTERNAL_ICON ='<svg class="external" viewBox="0 0 14 14" aria-hidden="true"><path d="M8 2h4v4M12 2L6.5 7.5M10.5 8.5V12h-8.5V3.5H5.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
-    resultsDiv.style.display = 'none';
-    resultsDiv.innerHTML = '';
-    loader.style.display = 'block';
-
-    const payload = {
-        query: queryVal,
-        exonic_pathogenic_user_input: pathogenicityChoice, // 'yes' or 'no'
-        // Persist other user choices
-        splice_user_input: window.userSpliceInput,
-        moa_user_input: window.userMoaInput,
-        exon_skipping_overrides: window.userEsOverrides,
-        knockdown_overrides: window.userKdOverrides,
-        wt_upregulation_overrides: window.userWtOverrides,
-        splice_switching_overrides: window.userSsOverrides,
-        gene_characteristics_overrides: window.userMoiOverride
-    };
-
-    try {
-        const response = await fetch('/assess', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        const data = await response.json();
-
-        // Save session and display
-        appendUserNotes(data);
-        saveSession(data, queryVal, window.userSpliceInput, window.userMoaInput, window.userCommentary, window.userEsOverrides, window.userKdOverrides, window.userWtOverrides, window.userMoiOverride, window.userSsOverrides);
-        displayResults(data);
-    } catch (error) {
-        console.error('Fetch Error:', error);
-        displayResults({ classification: 'Error', reason: 'Could not connect to the server.' });
-    } finally {
-        loader.style.display = 'none';
-    }
+// One accordion: header row (toggle button with title, status box and +/− icon, optional methods link) above its content
+function accordion({ id, title, suffix = '', status = '', tone = 'neutral', open = false, body = '', infoHref = '', level = 'h4', report = true, extraClass = '' }) {
+    const reportAttrs = report ? ` data-report-title="${esc(title + (suffix ? ' ' + suffix : ''))}" data-report-status="${esc(status)}"` : '';
+    const info = infoHref ? `<a class="info-link" href="${infoHref}" title="How AVEC assesses ${esc(title.toLowerCase())}">Methods</a>` : '';
+    return `<div class="strategy-block ${extraClass}"${reportAttrs}>
+        <div class="result-header tone-${tone}${open ? ' is-open' : ''}${info ? ' has-info' : ''}">
+            <${level} class="acc-heading"><button type="button" id="toggle-${id}" class="accordion-toggle${open ? ' open' : ''}" aria-expanded="${open}" aria-controls="content-${id}">
+                <span class="acc-title">${esc(title)}${suffix ? `<span class="acc-suffix"> ${esc(suffix)}</span>` : ''}</span>
+                ${status ? `<span class="chip-status">${esc(status)}</span>` : ''}
+                <span class="acc-icon" aria-hidden="true"></span>
+            </button></${level}>${info}
+        </div>
+        <div id="content-${id}" class="result-block"${open ? '' : ' hidden'}>${body}</div>
+    </div>`;
 }
 
-// --- EVENT LISTENER (for 'results' div) ---
-document.getElementById('results').addEventListener('click', async function(e) {
-    // Check if the "Yes" button was clicked
-    if (e.target && e.target.id === 'splice-validation-yes') {
-        e.preventDefault();
-        reassessWithSpliceInput('yes');
-    }
-    
-    // Check if the "No" button was clicked
-    if (e.target && e.target.id === 'splice-validation-no') {
-        e.preventDefault();
-        reassessWithSpliceInput('no');
-    }
-    // MoA selection buttons
-    if (e.target && e.target.id === 'moa-choice-gof') {
-        e.preventDefault();
-        reassessWithMoaInput('GoF');
-    }
-    if (e.target && e.target.id === 'moa-choice-lof') {
-        e.preventDefault();
-        reassessWithMoaInput('LoF');
-    }
-    if (e.target && e.target.id === 'moa-choice-dn') {
-        e.preventDefault();
-        reassessWithMoaInput('DN');
-    }
-    // ---  MOI Override Buttons ---
-    if (e.target && e.target.id === 'moi-choice-ad') {
-        e.preventDefault();
-        reassessWithMoiOverride('AD');
-    }
-    if (e.target && e.target.id === 'moi-choice-ar') {
-        e.preventDefault();
-        reassessWithMoiOverride('AR');
-    }
-    if (e.target && e.target.id === 'moi-choice-xd') {
-        e.preventDefault();
-        reassessWithMoiOverride('XD');
-    }
-    if (e.target && e.target.id === 'moi-choice-xr') {
-        e.preventDefault();
-        reassessWithMoiOverride('XR');
-    }
-    // ---  Exonic Pathogenicity Buttons ---
-    if (e.target && e.target.id === 'exonic-pathogenicity-yes') {
-        e.preventDefault();
-        reassessWithExonicPathogenicityInput('yes');
-    }
-    if (e.target && e.target.id === 'exonic-pathogenicity-no') {
-        e.preventDefault();
-        reassessWithExonicPathogenicityInput('no');
-    }
-    // --- Download Report Button ---
-    if (e.target && e.target.id === 'download-report-btn') {
-        e.preventDefault();
-        downloadReport();
-    }
-    // --- Commit Overrides Button ---
-    if (e.target && e.target.classList.contains('commit-overrides-btn')) {
-        e.preventDefault();
-        const strategy = e.target.dataset.strategy;
-        const form = document.getElementById(`override-form-${e.target.dataset.formId}`);
-        if (!form) return;
+// Two equally weighted answers to a question; an icon marks yes or no, colour doesn't push either
+const ANSWER_ICONS = {
+    yes: '<svg viewBox="0 0 16 16"><path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    no: '<svg viewBox="0 0 16 16"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+};
+function answerButtons(action, answers) {
+    return `<div class="splice-prompt-buttons answer-buttons">${answers.map(a =>
+        `<button type="button" class="answer answer--${a.kind}" data-action="${action}" data-value="${a.value}">
+            <span class="answer__icon" aria-hidden="true">${ANSWER_ICONS[a.kind]}</span>
+            <span class="answer__text"><span class="answer__label">${esc(a.label)}</span><span class="answer__hint">${esc(a.hint)}</span></span>
+        </button>`).join('')}</div>`;
+}
 
-        // Keep the strategy's existing overrides (e.g. those committed on another exon-skipping
-        // option) and record only checks whose state now differs from the automatic result
-        const existing = {
-            Exon_Skipping: window.userEsOverrides,
-            Knockdown: window.userKdOverrides,
-            WT_Upregulation: window.userWtOverrides,
-            Splice_Switching: window.userSsOverrides
-        }[strategy] || {};
-        const overrides = { ...existing };
-        form.querySelectorAll('li[data-check-name]').forEach(li => {
-            const checkName = li.dataset.checkName;
-            const isPassed = li.classList.contains('pass');
-            if (String(isPassed) === li.dataset.originalPassed) delete overrides[checkName];
-            else overrides[checkName] = isPassed;
-        });
+function linkRow(href, label, title) {
+    return `<div class="strategy-block">
+        <a class="result-header link-row tone-neutral" href="${esc(href)}" target="_blank" rel="noopener noreferrer" title="${esc(title)}">
+            <span class="link-row__inner"><span class="link-row__label">${label}</span>${EXTERNAL_ICON}</span>
+        </a>
+    </div>`;
+}
 
-        reassessWithGuidelineOverrides(strategy, overrides);
-    }
-    // --- Interactive Guideline Checklist Item ---
-    if (e.target && e.target.closest('.checklist.interactive li')) {
-        e.preventDefault();
-        const li = e.target.closest('li');
-
-        // Toggle pass/fail state
-        const isCurrentlyPass = li.classList.contains('pass');
-        li.classList.toggle('pass', !isCurrentlyPass);
-        li.classList.toggle('fail', isCurrentlyPass);
-
-        // Show this option's commit button
-        const form = li.closest('.override-form');
-        const commitBtnContainer = form && document.getElementById(form.id.replace('override-form-', 'override-controls-'));
-        if (commitBtnContainer) {
-            commitBtnContainer.style.display = 'block';
-        }
-    }
-});
-
-
-// --- displayResults ---
-function displayResults(data) {
+function displayResults(data, opts = {}) {
     window.lastAssessData = data;
     const resultsDiv = document.getElementById('results');
-    resultsDiv.style.display = 'block';
+
+    // Keep the reader's place on reassessment: scroll position, open sections and, when the
+    // visualization is unchanged, the already loaded genome browser
+    const openIds = opts.keepPlace ? [...resultsDiv.querySelectorAll('button.accordion-toggle.open')].map(t => t.id) : [];
+    // Statuses before a reassessment, so what changed can be highlighted afterwards
+    const statusOf = toggle => (toggle.querySelector('.chip-status') || {}).textContent || '';
+    const previousStatus = new Map(opts.keepPlace
+        ? [...resultsDiv.querySelectorAll('#assessments-accordions > .strategy-block button.accordion-toggle')].map(t => [t.id, statusOf(t)])
+        : []);
+    const scrollY = window.scrollY;
+    const oldIgv = document.getElementById('igv-container');
+    const vizKey = data && data.visualization ? JSON.stringify(data.visualization) : null;
+    const reuseIgv = opts.keepPlace && oldIgv && vizKey && window.igvState === vizKey && oldIgv.childElementCount > 0;
+    if (reuseIgv) oldIgv.remove();
+
+    resultsDiv.hidden = false;
     resultsDiv.innerHTML = '';
+    // Fresh results arrive in sequence; re-rendered ones stay still
+    resultsDiv.classList.toggle('results-enter', !opts.keepPlace && !reducedMotion);
 
     if (!data || data.classification === "Error" || data.classification === "Unable to Assess") {
-        const classificationClass = (data.classification || "Error").toLowerCase().replace(/ /g, '-');
-        resultsDiv.innerHTML = `<div class="result-header ${classificationClass}"><h4>${data.classification || "Error"}</h4></div><div class="result-block"><p>${data.reason || "An unknown error occurred."}</p></div>`;
+        const label = (data && data.classification) || 'Error';
+        const reason = (data && data.reason) || 'An unknown error occurred.';
+        let hint = '';
+        if (/VEP analysis failed/i.test(reason)) {
+            hint = `<p>Common causes:</p><ul>
+                <li>The transcript or its version is not in Ensembl's current annotation. Try the gene symbol or the MANE Select transcript.</li>
+                <li>The reference base doesn't match the GRCh38 reference genome at that position.</li>
+            </ul>`;
+        } else if (/Invalid input format/i.test(reason)) {
+            hint = `<p>Enter a transcript or gene followed by a c. or g. change, for example <code>${esc(EXAMPLES[1].query)}</code>.</p>`;
+        }
+        resultsDiv.innerHTML = `<div class="result-error">
+            <div class="result-header tone-${label === 'Error' ? 'bad' : 'muted'}"><h4>${esc(label)}</h4></div>
+            <div class="result-block"><p>${reason}</p>${hint}</div>
+        </div>`;
+        window.igvState = null;
         return;
     }
 
-    let html = '';
-
-    // Precompute MoA-related values for use across sections
     const assessmentsObj = data.assessments || {};
     const summaryObj = data.summary || {};
     const resolvedMoa = summaryObj.resolved_moa || window.userMoaInput || null;
@@ -858,31 +1394,25 @@ function displayResults(data) {
     // N1C_Assessed_Variants match are shown but the assessment continues normally.
     const n1cRegistry = assessmentsObj.N1C_Registry_Check;
     const hasN1C = !!(n1cRegistry && !n1cRegistry.under_development && !n1cRegistry.informational);
-    const n1cGeneKnockdown = assessmentsObj && assessmentsObj.N1C_Gene_Knockdown;
+    const n1cGeneKnockdown = assessmentsObj.N1C_Gene_Knockdown;
     const hasN1CKnockdown = !!(n1cGeneKnockdown && !n1cGeneKnockdown.under_development);
+    const overview = [];  // rows of the at-a-glance list: { target, name, status, tone }
 
+    // ---------- Summary ----------
+    let summaryHTML = '';
     if (data.summary) {
-        let geneHTML = data.summary.gene || 'N/A';
-        if (data.summary.gene_url) {
-            geneHTML = `<a href="${data.summary.gene_url}" target="_blank" rel="noopener noreferrer">${geneHTML}</a>`;
-        }
-        
-        let haploHTML = (data.summary.haploinsufficiency && data.summary.haploinsufficiency.text) || 'N/A';
-        if (data.summary.haploinsufficiency && data.summary.haploinsufficiency.url) {
-            haploHTML = `<a href="${data.summary.haploinsufficiency.url}" target="_blank" rel="noopener noreferrer">${haploHTML}</a>`;
-        }
-
-        let triploHTML = (data.summary.triplosensitivity && data.summary.triplosensitivity.text) || 'N/A';
-        if (data.summary.triplosensitivity && data.summary.triplosensitivity.url) {
-            triploHTML = `<a href="${data.summary.triplosensitivity.url}" target="_blank" rel="noopener noreferrer">${triploHTML}</a>`;
-        }
+        const s = data.summary;
+        const link = (url, text) => url ? `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${text}</a>` : text;
+        const geneHTML = link(s.gene_url, esc(s.gene || 'N/A'));
+        const haploHTML = link(s.haploinsufficiency && s.haploinsufficiency.url, esc((s.haploinsufficiency && s.haploinsufficiency.text) || 'N/A'));
+        const triploHTML = link(s.triplosensitivity && s.triplosensitivity.url, esc((s.triplosensitivity && s.triplosensitivity.text) || 'N/A'));
 
         // Transcript link to Ensembl transcript page when available
-        const txId = data.summary.transcript_id || null;
+        const txId = s.transcript_id || null;
         const transcriptHTML = txId
-            ? (String(txId).startsWith('ENST')
-                ? `<a href="https://www.ensembl.org/Homo_sapiens/Transcript/Summary?t=${encodeURIComponent(txId)}" target="_blank" rel="noopener noreferrer">${txId}</a>`
-                : `<a href="https://www.ensembl.org/Homo_sapiens/Search/Results?q=${encodeURIComponent(txId)};site=ensembl" target="_blank" rel="noopener noreferrer">${txId}</a>`)
+            ? link(String(txId).startsWith('ENST')
+                ? `https://www.ensembl.org/Homo_sapiens/Transcript/Summary?t=${encodeURIComponent(txId)}`
+                : `https://www.ensembl.org/Homo_sapiens/Search/Results?q=${encodeURIComponent(txId)};site=ensembl`, esc(txId))
             : 'N/A';
 
         // Transcript selection warning + switch control (only present when the user typed a specific transcript)
@@ -895,419 +1425,298 @@ function displayResults(data) {
             // (When there's no toggle, e.g. the "could not confirm transcript" fallback, always show.)
             const showTranscriptWarning = txInfo.selected === 'input' || !txInfo.available_alternate;
             if (showTranscriptWarning) {
-                if (txInfo.warning) {
-                    transcriptWarningHTML += `<br><span style="color:#b45309;">&#9888; ${txInfo.warning}</span>`;
-                }
-                if (txInfo.version_note) {
-                    transcriptWarningHTML += `<br><span style="color:#6b7280; font-size:0.9em;">${txInfo.version_note}</span>`;
-                }
+                if (txInfo.warning) transcriptWarningHTML += `<span class="tx-warning">${txInfo.warning}</span>`;
+                if (txInfo.version_note) transcriptWarningHTML += `<span class="tx-version">${txInfo.version_note}</span>`;
             }
             if (txInfo.available_alternate) {
                 const switchLabel = txInfo.selected === 'input'
                     ? `Switch to ${txInfo.default_label} (${txInfo.default_transcript_id})`
                     : `Switch to input transcript (${txInfo.input_transcript_id})`;
-                transcriptSwitchHTML = `<div style="margin-top:0.6em;"><button type="button" onclick="window.toggleTranscriptView()" style="font-size:0.85em;">${switchLabel}</button></div>`;
+                transcriptSwitchHTML = `<div><button type="button" class="transcript-switch" data-action="switch-transcript">${esc(switchLabel)}</button></div>`;
             }
         }
         // Mode of Inheritance links to the same page as Gene (external shows both)
-        let moiHTML = '<span style="color:#dc3545; font-weight:bold;">Not available</span>';
-        const moiArr = data.summary.moi || [];
-        if (moiArr.length > 0) {
-            if (data.summary.gene_url) {
-                moiHTML = moiArr.map(m => `<a href="${data.summary.gene_url}" target="_blank" rel="noopener noreferrer">${m}</a>`).join(', ');
-            } else {
-                moiHTML = moiArr.join(', ');
-            }
-        }
-        
-        // Orphanet link for the gene
-        const orphaURL = data.summary.gene ? `https://www.orpha.net/en/disease/gene/${encodeURIComponent(data.summary.gene)}` : null;
-        const orphaLinkHTML = orphaURL ? `<a href="${orphaURL}" target="_blank" rel="noopener noreferrer">${data.summary.gene}</a>` : 'N/A';
-        const proteinEffectHTML = data.summary.protein_effect || 'N/A';
-        const rcnvObj = data.summary.rcnv || {};
-        const rcnvLink = rcnvObj.url || "#";
-        // Create links for the scores
-        const pHaploHTML = rcnvObj.pHaplo && rcnvObj.pHaplo !== 'N/A' 
-            ? `<a href="${rcnvLink}" target="_blank" rel="noopener noreferrer" title="Collins et al. 2022">${rcnvObj.pHaplo}</a>` 
-            : 'N/A';
-        const pTriploHTML = rcnvObj.pTriplo && rcnvObj.pTriplo !== 'N/A'
-            ? `<a href="${rcnvLink}" target="_blank" rel="noopener noreferrer" title="Collins et al. 2022">${rcnvObj.pTriplo}</a>`
-            : 'N/A';
+        const moiArr = s.moi || [];
+        const moiHTML = moiArr.length ? moiArr.map(m => link(s.gene_url, esc(m))).join(', ') : '<span class="moi-missing">Not available</span>';
+        const orphaHTML = s.gene ? link(`https://www.orpha.net/en/disease/gene/${encodeURIComponent(s.gene)}`, esc(s.gene)) : 'N/A';
+        const rcnvObj = s.rcnv || {};
+        const score = v => v && v !== 'N/A' ? `<a href="${esc(rcnvObj.url || '#')}" target="_blank" rel="noopener noreferrer" title="Collins et al. 2022">${esc(v)}</a>` : 'N/A';
 
-        html += `<div class="summary-block"><h4>Query Summary</h4><ul>
-                                <li><strong>Gene:</strong> ${geneHTML}</li>
-                                <li><strong>Transcript:</strong> ${transcriptHTML}${transcriptSwitchHTML}${transcriptWarningHTML}</li>
-                                <li><strong>Protein consequence:</strong> ${proteinEffectHTML}</li>
-                                <li><strong>Mode of Inheritance:</strong> ${moiHTML}</li>
-                                <li><strong>ClinGen Haploinsufficiency:</strong> ${haploHTML}</li>
-                                <li><strong>ClinGen Triplosensitivity:</strong> ${triploHTML}</li>
-                                <li><strong>pHaplo:</strong> ${pHaploHTML}</li>
-                                <li><strong>pTriplo:</strong> ${pTriploHTML}</li>
-                                <li><strong>Orphanet:</strong> ${orphaLinkHTML}</li>
-                                ${data.summary.note ? `<li><strong>Notes:</strong> ${data.summary.note}</li>` : ''}
-                                </ul></div>`;
-       }
+        summaryHTML = `<section class="summary-block" aria-labelledby="summary-title"><h3 id="summary-title">Summary</h3><ul>
+            <li><strong>Gene</strong> ${geneHTML}</li>
+            <li><strong>Transcript</strong> ${transcriptHTML}${transcriptSwitchHTML}${transcriptWarningHTML}</li>
+            <li><strong>Protein consequence</strong> ${esc(s.protein_effect || 'N/A')}</li>
+            <li><strong>Mode of inheritance</strong> ${moiHTML}</li>
+            <li><strong>ClinGen haploinsufficiency</strong> ${haploHTML}</li>
+            <li><strong>ClinGen triplosensitivity</strong> ${triploHTML}</li>
+            <li><strong>pHaplo</strong> ${score(rcnvObj.pHaplo)}</li>
+            <li><strong>pTriplo</strong> ${score(rcnvObj.pTriplo)}</li>
+            <li><strong>Orphanet</strong> ${orphaHTML}</li>
+            ${s.note ? `<li class="summary-wide"><strong>Notes</strong> ${s.note}</li>` : ''}
+        </ul></section>`;
+    }
 
-    html += '<div id="igv-container" style="display:none;"></div>';
+    const igvHTML = data.visualization ? '<div id="igv-container" hidden></div>' : '';
 
-    // Literature accordion (PubMed and Google Scholar) above assessments
+    // ---------- Literature ----------
+    let literatureHTML = '';
     if (data.summary && data.summary.gene) {
-        html += '<div class="section-block"><div class="section-header-row"><h4>Literature search</h4><div class="expand-controls"><button id="expand-collapse-literature" class="secondary" data-expanded="false">Expand/Collapse</button></div></div>';
-        html += '<div id="literature-accordions">';
         const gene = data.summary.gene;
-        const pubmedQuery = `(${gene}) AND (ASO OR AON OR "Antisense oligonucleotide")`;
-        const pubmedURL = 'https://pubmed.ncbi.nlm.nih.gov/?term=' + encodeURIComponent(pubmedQuery);
-
-        html += `<div class="strategy-block">
-                <div id="toggle-literature" class="result-header unable-to-assess accordion-toggle" style="cursor: pointer; user-select: none;">
-                    <h4>Antisense Oligonucleotide<span class="chevron">&#9662;</span></h4>
-                </div>
-                <div id="content-literature" class="result-block" style="display: none;">
-                    <p><strong>Query:</strong> ${esc(pubmedQuery)}</p>
-                    <div id="pubmed-results" data-gene="${esc(gene)}">Loading PubMed results...</div>
-                    <div class="pubmed-footer"><a href="${pubmedURL}" target="_blank" rel="noopener noreferrer">Open full results on PubMed</a></div>
-                    <p class="note" style="margin-top:0.5em;">Powered by NCBI E-utilities.</p>
-                </div>
-            </div>`;
+        let blocks = accordion({ id: 'literature', title: 'Antisense oligonucleotides (PubMed)', body: pubmedBody(`(${gene}) AND (ASO OR AON OR "Antisense oligonucleotide")`, 'pubmed-results') });
 
         // Varaico: direct link to variant-specific literature (no accordion expansion)
         if (data.summary.varaico_url) {
-            html += `<div class="strategy-block">
-                <a href="${data.summary.varaico_url}" target="_blank" rel="noopener noreferrer" class="result-header unable-to-assess" style="display:block; text-decoration:none; cursor:pointer; border-radius:10px;" title='Varaico stands for "Variation Research Advancing Insight in Complex Organisms" and accompanies the UCSC genome browser track. It explores literature-extracted genetic variants and their associated publications.'>
-                    <h4>Varaico <span class="chevron">&#8599;</span></h4>
-                </a>
-            </div>`;
+            blocks += linkRow(data.summary.varaico_url, '<strong>Varaico</strong>&nbsp;variant literature',
+                'Varaico stands for "Variation Research Advancing Insight in Complex Organisms" and accompanies the UCSC genome browser track. It explores literature-extracted genetic variants and their associated publications.');
         }
-
         // LitVar2: direct link to publications mentioning this variant, keyed by its dbSNP rsID
-        // (backend-resolved; only present when LitVar2 has an entry for that rsID)
+        // (backend-resolved; only present when the variant has an rsID)
         const litvar = data.summary.litvar;
         if (litvar && litvar.url) {
             const litvarCount = Number(litvar.pmids_count);
-            const litvarCountHTML = Number.isFinite(litvarCount) && litvarCount > 0
-                ? ` (${litvarCount.toLocaleString()} publication${litvarCount === 1 ? '' : 's'})`
-                : '';
-            html += `<div class="strategy-block">
-                <a href="${litvar.url}" target="_blank" rel="noopener noreferrer" class="result-header unable-to-assess" style="display:block; text-decoration:none; cursor:pointer; border-radius:10px;" title='LitVar2 (NCBI) collects publications that mention this variant, matched by its dbSNP identifier ${litvar.rsid} across the different notations papers use to cite it.'>
-                    <h4>LitVar2 &ndash; ${litvar.rsid}${litvarCountHTML} <span class="chevron">&#8599;</span></h4>
-                </a>
-            </div>`;
+            const countText = Number.isFinite(litvarCount) && litvarCount > 0 ? `, ${litvarCount.toLocaleString()} publication${litvarCount === 1 ? '' : 's'}` : '';
+            blocks += linkRow(litvar.url, `<strong>LitVar2</strong>&nbsp;${esc(litvar.rsid)}${countText}`,
+                `LitVar2 (NCBI) collects publications that mention this variant, matched by its dbSNP identifier ${litvar.rsid} across the different notations papers use to cite it.`);
         }
 
         // Shared by the Pathomechanism/Splicing searches below: narrows the search to this
         // gene/transcript AND whichever variant notations (cDNA, single-letter protein, genomic)
         // the backend resolved for the variant, regardless of which one the user typed.
-        function buildGeneVariantPrefix(gene, data) {
-            const txId = data.summary && data.summary.transcript_id;
-            const idParts = [];
-            if (gene) idParts.push(gene);
-            if (txId) idParts.push(`"${txId}"`);
-            const idClause = idParts.length ? `(${idParts.join(' OR ')})` : '';
-
-            const variantTerms = (data.summary && data.summary.variant_notations) || [];
-            const variantClause = variantTerms.length ? `(${variantTerms.join(' OR ')})` : '';
-
-            if (idClause && variantClause) return `${idClause} AND ${variantClause}`;
-            return idClause || variantClause;
-        }
+        const txId = data.summary.transcript_id;
+        const idParts = [gene, txId ? `"${txId}"` : null].filter(Boolean);
+        const idClause = idParts.length ? `(${idParts.join(' OR ')})` : '';
+        const variantTerms = data.summary.variant_notations || [];
+        const variantClause = variantTerms.length ? `(${variantTerms.join(' OR ')})` : '';
+        const prefix = idClause && variantClause ? `${idClause} AND ${variantClause}` : (idClause || variantClause);
 
         // Pathomechanism (Mechanism of Action) contextual PubMed search
-        (function(){
-            const prefix = buildGeneVariantPrefix(gene, data);
-            const terms = '("Pathomechanism" OR "Hypomorphic" OR "Hypomorph" OR "Gain of Function" OR GoF OR "Gain-of-Function" OR LoF OR "loss of function" OR "loss-of-function" OR DN OR "dominant-negative" OR "Dominant negative")';
-            const moaQuery = prefix ? `${prefix} AND ${terms}` : terms;
-            const pmUrl = 'https://pubmed.ncbi.nlm.nih.gov/?term=' + encodeURIComponent(moaQuery);
-            html += `
-                <div class="strategy-block">
-                    <div id="toggle-moa-pubmed" class="result-header unable-to-assess accordion-toggle" style="cursor: pointer; user-select: none;">
-                        <h4>Pathomechanism<span class="chevron">&#9662;</span></h4>
-                    </div>
-                    <div id="content-moa-pubmed" class="result-block" style="display: none;">
-                        <p><strong>Query:</strong> ${esc(moaQuery)}</p>
-                        <div id="pubmed-moa-results" class="pubmed-context" data-query="${esc(moaQuery)}">Loading PubMed results...</div>
-                        <div class="pubmed-footer"><a href="${pmUrl}" target="_blank" rel="noopener noreferrer">Open full results on PubMed</a></div>
-                        <p class="note" style="margin-top:0.5em;">Powered by NCBI E-utilities.</p>
-                    </div>
-                </div>`;
-        })();
+        const moaTerms = '("Pathomechanism" OR "Hypomorphic" OR "Hypomorph" OR "Gain of Function" OR GoF OR "Gain-of-Function" OR LoF OR "loss of function" OR "loss-of-function" OR DN OR "dominant-negative" OR "Dominant negative")';
+        blocks += accordion({ id: 'moa-pubmed', title: 'Pathomechanism (PubMed)', body: pubmedBody(prefix ? `${prefix} AND ${moaTerms}` : moaTerms, 'pubmed-moa-results') });
 
         // Splicing contextual PubMed search
-        (function(){
-            const prefix = buildGeneVariantPrefix(gene, data);
-            const terms = '("RNA-seq" OR "RNA sequencing" OR "RT-PCR" OR "RT-qPCR" OR "functional validation" OR "functional evidence")';
-            const spliceQuery = prefix ? `${prefix} AND ${terms}` : terms;
-            const pmUrl = 'https://pubmed.ncbi.nlm.nih.gov/?term=' + encodeURIComponent(spliceQuery);
-            html += `
-                <div class="strategy-block">
-                    <div id="toggle-splice-pubmed" class="result-header unable-to-assess accordion-toggle" style="cursor: pointer; user-select: none;">
-                        <h4>Splicing<span class="chevron">&#9662;</span></h4>
-                    </div>
-                    <div id="content-splice-pubmed" class="result-block" style="display: none;">
-                        <p><strong>Query:</strong> ${esc(spliceQuery)}</p>
-                        <div id="pubmed-splice-results" class="pubmed-context" data-query="${esc(spliceQuery)}">Loading PubMed results...</div>
-                        <div class="pubmed-footer"><a href="${pmUrl}" target="_blank" rel="noopener noreferrer">Open full results on PubMed</a></div>
-                        <p class="note" style="margin-top:0.5em;">Powered by NCBI E-utilities.</p>
-                    </div>
-                </div>`;
-        })();
-        html += '</div>'; // end #literature-accordions
-        html += '</div>'; // end .section-block (literature search)
+        const spliceTerms = '("RNA-seq" OR "RNA sequencing" OR "RT-PCR" OR "RT-qPCR" OR "functional validation" OR "functional evidence")';
+        blocks += accordion({ id: 'splice-pubmed', title: 'Splicing (PubMed)', body: pubmedBody(prefix ? `${prefix} AND ${spliceTerms}` : spliceTerms, 'pubmed-splice-results') });
+
+        literatureHTML = `<section class="section-block" aria-labelledby="literature-title">
+            <div class="section-header-row"><h3 id="literature-title">Literature</h3>
+                <div class="expand-controls"><button type="button" class="text-btn" data-action="expand-all" data-target="literature-accordions">Expand all</button></div></div>
+            <div id="literature-accordions">${blocks}</div>
+        </section>`;
     }
 
+    // ---------- Therapeutic assessments ----------
+    let assessmentsHTML = '';
     if (data.assessments) {
-        html += '<div class="section-block"><div class="section-header-row"><h4>Therapeutic Assessments</h4><div class="expand-controls"><button id="expand-collapse-assessments" class="secondary" data-expanded="false">Expand/Collapse</button></div></div>';
-        html += '<div id="assessments-accordions">';
-        
-        // --- MOI Override Block ---
-        let currentMoi = null;
-        if (window.userMoiOverride && window.userMoiOverride.moi && window.userMoiOverride.moi.length > 0) {
-            const m = window.userMoiOverride.moi[0];
-            if (m.includes('Autosomal dominant')) currentMoi = 'AD';
-            else if (m.includes('Autosomal recessive')) currentMoi = 'AR';
-            else if (m.includes('X-linked dominant')) currentMoi = 'XD';
-            else if (m.includes('X-linked recessive')) currentMoi = 'XR';
-        }
-        const getMoiBtnClass = (moi) => (currentMoi === moi ? 'yes-btn' : 'neutral-btn');
-        const moiUnavailable = !(summaryObj.moi && summaryObj.moi.length > 0);
+        let blocks = '';
 
-        html += `<div class="strategy-block">
-            <div id="toggle-moi-override" class="result-header unable-to-assess accordion-toggle${moiUnavailable ? ' open' : ''}" style="cursor: pointer; user-select: none;">
-                <h4>Mode of Inheritance<span class="chevron">&#9662;</span></h4>
-            </div>
-            <div id="content-moi-override" class="result-block" style="display: ${moiUnavailable ? 'block' : 'none'};">
-                ${moiUnavailable ? '<p style="color:#dc3545; font-weight:bold;">Mode of Inheritance could not be obtained from ClinGen, please provide Mode of Inheritance here!</p>' : ''}
-                <p style="font-weight: bold;">If the ClinGen Mode of Inheritance is incorrect or missing, you can manually select one here to reassess eligibility.</p>
-                <div class="splice-prompt-buttons">
-                    <button id="moi-choice-ad" type="button" class="${getMoiBtnClass('AD')}">AD</button>
-                    <button id="moi-choice-ar" type="button" class="${getMoiBtnClass('AR')}">AR</button>
-                    <button id="moi-choice-xd" type="button" class="${getMoiBtnClass('XD')}">XD</button>
-                    <button id="moi-choice-xr" type="button" class="${getMoiBtnClass('XR')}">XR</button>
-                </div>
-            </div>
-        </div>`;
+        // Mode of inheritance: ClinGen's default is filled in on its button(s); a user override
+        // is marked as the user's choice, the ClinGen default stays tinted beside it
+        const currentMoi = moiChoice();
+        // ClinGen terms: remembered from the query's first assessment (the summary reports the override after one)
+        const clingenMoi = (window.clingenMoi && window.clingenMoi.length) ? window.clingenMoi : (currentMoi ? [] : (summaryObj.moi || []));
+        const clingenCodes = moiCodes(clingenMoi);
+        // Plain 'X-linked inheritance' doesn't say dominant or recessive: both X-linked buttons are hinted
+        const xLinkedOnly = !clingenCodes.length && clingenMoi.some(m => /^x-linked inheritance$/i.test(String(m).trim()));
+        const moiUnavailable = !clingenMoi.length && !(summaryObj.moi && summaryObj.moi.length > 0);
+        const moiNeedsInput = !currentMoi && (moiUnavailable || xLinkedOnly);
+        const moiButtons = [['AD', 'Autosomal dominant'], ['AR', 'Autosomal recessive'], ['XD', 'X-linked dominant'], ['XR', 'X-linked recessive']]
+            .map(([code, name]) => {
+                const isDefault = clingenCodes.includes(code);
+                const isChosen = currentMoi === code;
+                const isHint = xLinkedOnly && (code === 'XD' || code === 'XR');
+                const sub = isChosen ? 'your choice' : isDefault ? 'ClinGen' : name.toLowerCase();
+                const cls = [isChosen && 'is-selected', isDefault && 'is-default', isHint && 'is-hint'].filter(Boolean).join(' ');
+                const pressed = isChosen || (isDefault && !currentMoi);
+                return `<button type="button" data-action="moi" data-value="${code}" class="${cls}" aria-pressed="${pressed}" title="${name}" aria-label="${name}${isDefault ? ' (ClinGen)' : ''}"><span class="choice-code">${code}</span><span class="choice-sub">${sub}</span></button>`;
+            }).join('');
+        const clingenText = clingenMoi.length ? clingenMoi.map(esc).join(', ') : '';
+        blocks += accordion({
+            id: 'moi-override', title: 'Mode of inheritance', report: false,
+            status: currentMoi ? `Set to ${currentMoi}` : clingenCodes.length ? `ClinGen: ${clingenCodes.join(', ')}` : xLinkedOnly ? 'ClinGen: X-linked' : (moiUnavailable ? 'Missing' : ''),
+            tone: moiNeedsInput ? 'input' : 'neutral',
+            open: moiNeedsInput,
+            body: `${moiUnavailable ? '<p class="moi-missing">Mode of Inheritance could not be obtained from ClinGen, please provide Mode of Inheritance here!</p>' : ''}
+                ${clingenText ? `<p>ClinGen lists <strong>${clingenText}</strong> for this gene${xLinkedOnly ? ', without saying whether it is dominant or recessive. Choose XD or XR to assess gene-level strategies.' : ', marked below.'}</p>` : ''}
+                <p>If ClinGen's mode of inheritance is incorrect or missing for this variant, select one to reassess eligibility.</p>
+                <div class="splice-prompt-buttons choice-buttons${currentMoi ? ' has-choice' : ''}">${moiButtons}</div>`,
+        });
+        if (moiNeedsInput) overview.push({ target: 'toggle-moi-override', name: 'Mode of inheritance', status: 'Your input needed', tone: 'input' });
 
-        // MoA selection block inside Therapeutic Assessments
+        // Mechanism of action selection
         if (!hasN1C) {
-            const currentMoa = resolvedMoa; // 'GoF', 'LoF', 'DN' or null
-            const getMoaBtnClass = (m) => (currentMoa === m ? 'yes-btn' : 'neutral-btn');
-
-            html += `<div class="strategy-block">`;
-            html += `<div id="toggle-moa" class="result-header unable-to-assess accordion-toggle" style="cursor: pointer; user-select: none;">
-                          <h4>Mechanism of Action ${currentMoa ? ': ' + currentMoa : ''} <span class="chevron">&#9662;</span></h4>
-                      </div>`;
-            html += `<div id="content-moa" class="result-block" style="display: block;">
-                        <p style="font-weight: bold;">Please select the mechanism relevant to your variant to assess for mechanism-specific strategies (Knockdown, WT Upregulation):</p>
-                        <div class="splice-prompt-buttons">
-                            <button id="moa-choice-gof" type="button" class="${getMoaBtnClass('GoF')}">GoF</button>
-                            <button id="moa-choice-lof" type="button" class="${getMoaBtnClass('LoF')}">LoF</button>
-                            <button id="moa-choice-dn" type="button" class="${getMoaBtnClass('DN')}">DN</button>
-                        </div>
-                    `;
-            html += `</div></div>`;
+            const moaButtons = [['GoF', 'Gain of function'], ['LoF', 'Loss of function'], ['DN', 'Dominant negative']]
+                .map(([code, name]) => `<button type="button" data-action="moa" data-value="${code}" class="${resolvedMoa === code ? 'is-selected' : ''}" aria-pressed="${resolvedMoa === code}" title="${name}" aria-label="${name}"><span class="choice-code">${code}</span><span class="choice-sub">${name.toLowerCase()}</span></button>`).join('');
+            blocks += accordion({
+                id: 'moa', title: 'Mechanism of action', report: false,
+                status: resolvedMoa || 'Not selected',
+                tone: resolvedMoa ? 'neutral' : 'input',
+                open: true,
+                body: `<p class="prompt-question">Please select the mechanism relevant to your variant to assess for mechanism-specific strategies (Knockdown, WT Upregulation):</p>
+                    <div class="splice-prompt-buttons choice-buttons">${moaButtons}</div>
+                    <p class="note">The Pathomechanism search under Literature can help with this choice.</p>`,
+            });
+            if (!resolvedMoa) overview.push({ target: 'toggle-moa', name: 'Mechanism of action', status: 'Your input needed', tone: 'input' });
         }
+
+        const infoTabs = { Exon_Skipping: 'skipping', Splice_Switching: 'splice', Knockdown: 'knockdown', WT_Upregulation: 'wt' };
         for (const [strategy, result] of Object.entries(data.assessments)) {
             if (hasN1CKnockdown && strategy === 'Knockdown') continue;
-            const strategyName = strategy.replace(/_/g, ' ').replace(/\w/g, l => l.toUpperCase());
+            const name = strategyName(strategy);
+            const infoHref = infoTabs[strategy] ? `/about#${infoTabs[strategy]}` : '';
 
-            // --- START: MODIFIED LOGIC FOR SPLICE_SWITCHING & EXONIC PATHOGENICITY (COMBINED) ---
             if (strategy === 'Splice_Switching' && !Array.isArray(result) && result.user_validation_prompt_exonic_pathogenicity) {
-                // Render the special "Awaiting Pathogenicity Input" block
-                html += `<div class="strategy-block">`;
-                html += `<div id="toggle-${strategy}" class="result-header unable-to-assess accordion-toggle" style="cursor: pointer; user-select: none;">
-                             <h4>${strategyName}: Awaiting User Input <span class="chevron">&#9662;</span></h4>
-                         </div>`;
-                // Set to 'block' so the user sees the question immediately
-                html += `<div id="content-${strategy}" class="result-block" style="display: block;">`; 
-                html += `<p style="font-weight: bold;">${result.reason}</p>`;
-                
-                html += `<div class="splice-prompt-buttons">
-                             <button id="exonic-pathogenicity-yes" type="button" class="no-btn">Pathogenic Effects (independent of splicing)</button>
-                             <button id="exonic-pathogenicity-no" type="button" class="yes-btn">No Pathogenic Effects (independent of splicing)</button>
-                         </div>`;
-                html += `</div></div>`;
-            
+                // Awaiting the user's answer on exonic pathogenicity
+                blocks += accordion({
+                    id: strategy, title: name, status: 'Awaiting user input', tone: 'input', open: true, infoHref,
+                    // The server marks emphasis as *word*
+                    body: `<p class="prompt-question">${String(result.reason || '').replace(/\*([^*]+)\*/g, '<em>$1</em>')}</p>
+                        ${answerButtons('exonic', [
+                            { value: 'yes', kind: 'yes', label: 'Yes, pathogenic independent of splicing', hint: 'For example, it also changes the protein' },
+                            { value: 'no', kind: 'no', label: 'No, pathogenic only through splicing', hint: 'Correcting the splicing would restore function' },
+                        ])}`,
+                });
+                overview.push({ target: `toggle-${strategy}`, name, status: 'Your input needed', tone: 'input' });
             } else if (strategy === 'Splice_Switching' && !Array.isArray(result) && result.user_validation_prompt) {
-                // Render the special "Awaiting Validation" block with "Yes/No" buttons
-                html += `<div class="strategy-block">`;
-                html += `<div id="toggle-${strategy}" class="result-header unable-to-assess accordion-toggle" style="cursor: pointer; user-select: none;">
-                             <h4>${strategyName}: Awaiting Validation <span class="chevron">&#9662;</span></h4>
-                         </div>`;
-                // Set to 'block' so the user sees the question immediately
-                html += `<div id="content-${strategy}" class="result-block" style="display: block;">`; 
-               
-                html += `<p style="font-weight: bold;">Splicing effect was not found in databases. Is there a known splice-altering effect validated with qPCR or Transcriptomics?</p>`;
-               
-                html += `<div class="splice-prompt-buttons">
-                             <button id="splice-validation-yes" type="button" class="yes-btn">Yes</button>
-                             <button id="splice-validation-no" type="button" class="no-btn">No</button>
-                         </div>`;
-                html += `</div></div>`;
+                // Not in SpliceVarDB/SSCVDB: ask whether a splice effect has been validated
+                blocks += accordion({
+                    id: strategy, title: name, status: 'Awaiting validation', tone: 'input', open: true, infoHref,
+                    body: `<p class="prompt-context">No splicing effect for this variant was found in SpliceVarDB or SSCVDB.</p>
+                        <p class="prompt-question">Is there a known splice-altering effect validated with qPCR or transcriptomics?</p>
+                        ${answerButtons('splice', [
+                            { value: 'yes', kind: 'yes', label: 'Yes, validated', hint: 'qPCR or RNA-seq shows mis-splicing' },
+                            { value: 'no', kind: 'no', label: 'No', hint: 'No validated splice-altering effect is known' },
+                        ])}`,
+                });
+                overview.push({ target: `toggle-${strategy}`, name, status: 'Your input needed', tone: 'input' });
             } else {
                 // Normalize result to array to handle multiple assessments (e.g. single + double exon skipping)
                 const resultsArray = Array.isArray(result) ? result : [result];
-                
                 resultsArray.forEach((resItem, idx) => {
-                // This is the "else" block: it contains all the *original* rendering logic
-                let classificationClass = (resItem.classification || "Unable to Assess").toLowerCase().replace(/ /g, '-');
-                // --- START: CUSTOM CLASSIFICATION MAPPING ---
-                const strategyToTabMap = {
-                    'Exon_Skipping': 'skipping',
-                    'Splice_Switching': 'splice',
-                    'Knockdown': 'knockdown',
-                    'WT_Upregulation': 'wt'
-                };
-                const tabId = strategyToTabMap[strategy];
-                const infoLink = tabId ? `<a href="/about#${tabId}" class="info-link" title="View methods for ${strategyName}">&#9432;</a>` : '';
-                const suffix = resultsArray.length > 1 ? ` (Option ${idx + 1})` : '';
-                const uniqueId = resultsArray.length > 1 ? `${strategy}-${idx}` : strategy;
-                
-                // Map WT Upregulation labels to existing CSS classes for color consistency
-                if (classificationClass === 'potential-possibilities-identified') {
-                    classificationClass = 'likely-eligible';
-                } else if (classificationClass === 'no-potential-possibilities-identified') {
-                    classificationClass = 'unlikely-eligible';
-                } else if (classificationClass === 'manual-assessment-required') {
-                    // Map 'Manual Assessment Required' to the 'Unable to Assess' style
-                    classificationClass = 'unable-to-assess';
-                }
-                
-                const isUnderDevN1C = (strategy === 'N1C_Registry_Check' || strategy === 'N1C_Gene_Knockdown') && (resItem.under_development || resItem.informational);
-                html += `<div class="strategy-block">`;
-                html += `<div id="toggle-${uniqueId}" class="result-header ${classificationClass} accordion-toggle${isUnderDevN1C ? ' open' : ''}" style="cursor: pointer; user-select: none;">
-                             <h4>${strategyName}${suffix} ${infoLink} <span class="chip-status status-${classificationClass}">${resItem.classification || "N/A"}</span> <span class="chevron">&#9662;</span></h4>
-                         </div>`;
-                // Under-development N1C entries are expanded by default so the user sees them immediately
-                const defaultDisplay = isUnderDevN1C ? 'block' : 'none';
-                html += `<div id="content-${uniqueId}" class="result-block" style="display: ${defaultDisplay};">`;
-                
-                if (strategy === 'Exon_Skipping' && resItem.total_exon_number && resItem.gene_id && resItem.transcript_id) {
-                    const ensemblLink = `https://www.ensembl.org/Homo_sapiens/Transcript/Exons?db=core;g=${resItem.gene_id};t=${resItem.transcript_id}`;
-                    html += `<p><strong>Target:</strong> <a href="${ensemblLink}" target="_blank" rel="noopener noreferrer">Exon ${resItem.total_exon_number}</a></p>`;
-                }
-                if (strategy === 'Exon_Skipping' && resItem.exon_length) {
-                    html += `<p><strong>Exon Length:</strong> ${resItem.exon_length} nt</p>`;
-                }
-                if(resItem.reason) html += `<p><strong>Reason:</strong> ${resItem.reason}</p>`;
-                
-                if(resItem.note) {
-                    html += `<p class="warning" style="margin-top: 0.5em;"><strong>Warning:</strong> ${resItem.note}</p>`;
-                }
-                
-                if(resItem.details) {
-                    html += '<h5>Details</h5><ul>';
-                    for (const [key, value] of Object.entries(resItem.details)) {
-                        // Values are plain text or http(s) URLs; N1C entries may list several URLs as 'url1, url2'
-                        const text = String(value ?? '');
-                        const urls = text.split(/,\s+/);
-                        if (text && urls.every(u => /^https?:\/\//i.test(u))) {
-                            const links = urls.map(u => `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(u)}</a>`).join(', ');
-                            html += `<li><strong>${esc(key)}:</strong> ${links}</li>`;
-                        } else {
-                            html += `<li><strong>${esc(key)}:</strong> ${esc(text)}</li>`;
+                    const classification = resItem.classification || 'Unable to Assess';
+                    const tone = toneFor(classification);
+                    const suffix = resultsArray.length > 1 ? `(option ${idx + 1})` : '';
+                    const uniqueId = resultsArray.length > 1 ? `${strategy}-${idx}` : strategy;
+                    // Under-development N1C entries are expanded by default so the user sees them immediately
+                    const isUnderDevN1C = (strategy === 'N1C_Registry_Check' || strategy === 'N1C_Gene_Knockdown') && (resItem.under_development || resItem.informational);
+                    let body = '';
+
+                    if (strategy === 'Exon_Skipping' && resItem.total_exon_number && resItem.gene_id && resItem.transcript_id) {
+                        const ensemblLink = `https://www.ensembl.org/Homo_sapiens/Transcript/Exons?db=core;g=${encodeURIComponent(resItem.gene_id)};t=${encodeURIComponent(resItem.transcript_id)}`;
+                        body += `<p><strong>Target:</strong> <a href="${ensemblLink}" target="_blank" rel="noopener noreferrer">Exon ${esc(resItem.total_exon_number)}</a></p>`;
+                    }
+                    if (strategy === 'Exon_Skipping' && resItem.exon_length) {
+                        body += `<p><strong>Exon length:</strong> ${esc(resItem.exon_length)} nt</p>`;
+                    }
+                    if (resItem.reason) body += `<p><strong>Reason:</strong> ${resItem.reason}</p>`;
+                    if (resItem.note) body += `<p class="warning"><strong>Warning:</strong> ${resItem.note}</p>`;
+
+                    if (resItem.details) {
+                        body += '<h5>Details</h5><ul>';
+                        for (const [key, value] of Object.entries(resItem.details)) {
+                            // Values are plain text or http(s) URLs; N1C entries may list several URLs as 'url1, url2'
+                            const text = String(value ?? '');
+                            const urls = text.split(/,\s+/);
+                            if (text && urls.every(u => /^https?:\/\//i.test(u))) {
+                                const links = urls.map(u => `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(u)}</a>`).join(', ');
+                                body += `<li><strong>${esc(key)}:</strong> ${links}</li>`;
+                            } else {
+                                body += `<li><strong>${esc(key)}:</strong> ${esc(text)}</li>`;
+                            }
                         }
-                    }
-                    html += '</ul>';
-                }
-
-                // One override form + commit button per result option (uniqueId), so each exon-skipping
-                // option (single exon, exon pairs) can be overridden on its own
-                if (resItem.checks && strategy !== 'WT_Upregulation') {
-                    const totalChecks = Object.keys(resItem.checks).length;
-                    const passedChecks = Object.values(resItem.checks).filter(c => c.passed).length;
-                    const hasEffectiveOverrides = Object.values(resItem.checks).some(c => c.overridden && c.passed !== c.original_passed);
-                    let overrideNote = hasEffectiveOverrides ? ' <span class="note">(Manual Override Applied)</span>' : '';
-
-                    html += `<h5>Guideline Checks <span class="chip ${passedChecks===totalChecks ? 'chip-ok':'chip-warn'}">${passedChecks}/${totalChecks} passed</span>${overrideNote}</h5>`;
-                    html += `<div id="override-form-${uniqueId}" class="override-form"><ul class="checklist interactive">`;
-                    for (const [check, status] of Object.entries(resItem.checks)) {
-                        const isPassed = status.passed;
-                        const isChanged = status.overridden && (status.passed !== status.original_passed);
-                        const overrideIndicator = isChanged ? ' <span class="note">(override)</span>' : '';
-                        const textContent = `${check}${overrideIndicator}`;
-                        html += `<li class="${isPassed ? 'pass' : 'fail'}" data-check-name="${check}" data-original-passed="${status.original_passed}">${isChanged ? `<strong>${textContent}</strong>` : textContent}</li>`;
-                    }
-                    html += '</ul></div>';
-                    html += `<div id="override-controls-${uniqueId}" class="override-controls" style="display: none; margin-top: 1em;"><button type="button" class="commit-overrides-btn" data-strategy="${strategy}" data-form-id="${uniqueId}">Commit Manual Overrides</button></div>`;
-                }
-                if (resItem.pathogenic_variant_counts) {
-                    let evidenceHeader = '<h5>Evidence from Databases</h5>';
-                    if (resItem.clinvar_url) {
-                        evidenceHeader = `<h5><a href="${resItem.clinvar_url}" target="_blank" rel="noopener noreferrer">Evidence from Databases (ClinVar)</a></h5>`;
-                    }
-                    html += evidenceHeader;
-
-                    let domainHTML = resItem.domain_count || 'N/A';
-                    if (Array.isArray(resItem.domain_details) && resItem.domain_details.length > 0) {
-                        const domainItems = resItem.domain_details.map(d => {
-                            const baseLabel = d.label || [d.name, d.source].filter(Boolean).join(' ') || 'Domain';
-                            const label = esc(d.source && !baseLabel.includes(d.source) ? `${baseLabel} (${d.source})` : baseLabel);
-                            if (d.url) return `<li><a href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">${label}</a></li>`;
-                            return `<li>${label}</li>`;
-                        }).join('');
-                        domainHTML = `<ul class="domain-list">${domainItems}</ul>`;
-                    } else if (resItem.domain_names && resItem.domain_names.length > 0) {
-                        domainHTML = resItem.domain_names.map(esc).join(', ');
+                        body += '</ul>';
                     }
 
-                    let trexomeHTML = 'None found';
-                    if (Array.isArray(resItem.trexome_repeats) && resItem.trexome_repeats.length > 0) {
-                        const trexomeItems = resItem.trexome_repeats.map(r => {
-                            const label = esc(r.repeat_type || 'Tandem repeat');
-                            const pctSuffix = (typeof r.overlap_percentage === 'number') ? ` (${r.overlap_percentage.toFixed(2)}% overlap)` : '';
-                            if (r.url) return `<li><a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">${label}</a>${pctSuffix}</li>`;
-                            return `<li>${label}${pctSuffix}</li>`;
-                        }).join('');
-                        trexomeHTML = `<ul class="domain-list">${trexomeItems}</ul>`;
+                    // One override form + commit button per result option (uniqueId), so each exon-skipping
+                    // option (single exon, exon pairs) can be overridden on its own
+                    if (resItem.checks && strategy !== 'WT_Upregulation') {
+                        const checks = Object.entries(resItem.checks);
+                        const passedChecks = checks.filter(([, c]) => c.passed).length;
+                        const hasEffectiveOverrides = checks.some(([, c]) => c.overridden && c.passed !== c.original_passed);
+                        body += `<h5>Guideline checks <span class="chip ${passedChecks === checks.length ? 'chip-ok' : 'chip-warn'}">${passedChecks}/${checks.length} passed</span>` +
+                            `<span class="checks-meter" aria-hidden="true"><span style="--p:${checks.length ? passedChecks / checks.length : 0}"></span></span>` +
+                            `${hasEffectiveOverrides ? ' <span class="note">(manual override applied)</span>' : ''}</h5>`;
+                        body += '<p class="note">Select a check to override it, then apply your overrides to reassess.</p>';
+                        body += `<div id="override-form-${uniqueId}" class="override-form"><ul class="checklist interactive">`;
+                        checks.forEach(([check, status], i) => {
+                            const isChanged = status.overridden && (status.passed !== status.original_passed);
+                            const text = `${esc(check)}${isChanged ? ' <span class="note">(override)</span>' : ''}`;
+                            body += `<li class="${status.passed ? 'pass' : 'fail'}" style="--i:${i}" role="checkbox" tabindex="0" aria-checked="${!!status.passed}" data-check-name="${esc(check)}" data-original-passed="${status.original_passed}" data-shown-passed="${!!status.passed}"><span>${isChanged ? `<strong>${text}</strong>` : text}</span></li>`;
+                        });
+                        body += '</ul></div>';
+                        body += `<div id="override-controls-${uniqueId}" class="override-controls" hidden><button type="button" class="commit-overrides-btn" data-action="commit-overrides" data-strategy="${strategy}" data-form-id="${uniqueId}">Apply overrides and reassess</button><span class="override-count"></span></div>`;
                     }
-                    let trexomeGeneHTML = '';
-                    if (strategy === 'Exon_Skipping') {
-                        const trexomeGene = (data.summary && data.summary.trexome_repeats) || {};
-                        const trexomeGeneCount = trexomeGene.repeat_count || 0;
-                        if (trexomeGeneCount > 0) {
-                            const typesSuffix = (trexomeGene.repeat_types && trexomeGene.repeat_types.length > 0) ? ` (${esc(trexomeGene.repeat_types.join(', '))})` : '';
-                            const geneCountHTML = trexomeGene.url
-                                ? `<a href="${esc(trexomeGene.url)}" target="_blank" rel="noopener noreferrer">${esc(trexomeGeneCount)}${typesSuffix}</a>`
-                                : `${trexomeGeneCount}${typesSuffix}`;
-                            trexomeGeneHTML = `<div class="note" style="margin: 0 0 0.3em 0;">Gene total: ${geneCountHTML}</div>`;
+
+                    if (resItem.pathogenic_variant_counts) {
+                        body += resItem.clinvar_url
+                            ? `<h5><a href="${esc(resItem.clinvar_url)}" target="_blank" rel="noopener noreferrer">Evidence from databases (ClinVar)</a></h5>`
+                            : '<h5>Evidence from databases</h5>';
+
+                        let domainHTML = esc(resItem.domain_count || 'N/A');
+                        if (Array.isArray(resItem.domain_details) && resItem.domain_details.length > 0) {
+                            const domainItems = resItem.domain_details.map(d => {
+                                const baseLabel = d.label || [d.name, d.source].filter(Boolean).join(' ') || 'Domain';
+                                const label = esc(d.source && !baseLabel.includes(d.source) ? `${baseLabel} (${d.source})` : baseLabel);
+                                return d.url ? `<li><a href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">${label}</a></li>` : `<li>${label}</li>`;
+                            }).join('');
+                            domainHTML = `<ul class="domain-list">${domainItems}</ul>`;
+                        } else if (resItem.domain_names && resItem.domain_names.length > 0) {
+                            domainHTML = resItem.domain_names.map(esc).join(', ');
                         }
+
+                        let trexomeHTML = resItem.trexome_unavailable ? 'TReXome DB could not be reached' : 'None found';
+                        if (Array.isArray(resItem.trexome_repeats) && resItem.trexome_repeats.length > 0) {
+                            const trexomeItems = resItem.trexome_repeats.map(r => {
+                                const label = esc(r.repeat_type || 'Tandem repeat');
+                                const pctSuffix = (typeof r.overlap_percentage === 'number') ? ` (${r.overlap_percentage.toFixed(2)}% overlap)` : '';
+                                return r.url ? `<li><a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">${label}</a>${pctSuffix}</li>` : `<li>${label}${pctSuffix}</li>`;
+                            }).join('');
+                            trexomeHTML = `<ul class="domain-list">${trexomeItems}</ul>`;
+                        }
+                        let trexomeGeneHTML = '';
+                        if (strategy === 'Exon_Skipping') {
+                            const trexomeGene = (data.summary && data.summary.trexome_repeats) || {};
+                            const trexomeGeneCount = trexomeGene.repeat_count || 0;
+                            if (trexomeGeneCount > 0) {
+                                const typesSuffix = (trexomeGene.repeat_types && trexomeGene.repeat_types.length > 0) ? ` (${esc(trexomeGene.repeat_types.join(', '))})` : '';
+                                const geneCountHTML = trexomeGene.url
+                                    ? `<a href="${esc(trexomeGene.url)}" target="_blank" rel="noopener noreferrer">${esc(trexomeGeneCount)}${typesSuffix}</a>`
+                                    : `${esc(trexomeGeneCount)}${typesSuffix}`;
+                                trexomeGeneHTML = `<div class="note">Gene total: ${geneCountHTML}</div>`;
+                            }
+                        }
+
+                        const spliceVariantLinks = resItem.splice_variant_links || {};
+                        const pathogenicLinks = resItem.pathogenic_variant_links || {};
+                        const renderVariantLinks = (variants) => {
+                            if (!Array.isArray(variants) || variants.length === 0) return '';
+                            const items = variants.map(v => {
+                                const label = esc(v.id || 'Variant');
+                                return v.url ? `<a href="${esc(v.url)}" target="_blank" rel="noopener noreferrer">${label}</a>` : label;
+                            }).join(', ');
+                            return `<div class="variant-links">${items}</div>`;
+                        };
+                        const counts = resItem.pathogenic_variant_counts;
+                        body += `<ul>
+                            <li><strong>Fraction of protein:</strong> ${esc(resItem.frac_cds || 'N/A')}</li>
+                            <li><strong>Overlapping protein domains:</strong> ${domainHTML}</li>
+                            <li><strong>Tandem repeat domains (TReXome DB):</strong> ${trexomeGeneHTML}${trexomeHTML}</li>
+                            <li><strong>Pathogenic variants in exon (≥ 2-star rating on ClinVar):</strong><ul>
+                                <li>Missense: ${esc(counts.missense)}${renderVariantLinks(pathogenicLinks.missense)}</li>
+                                <li>Nonsense: ${esc(counts.nonsense)}${renderVariantLinks(pathogenicLinks.nonsense)}</li>
+                                <li>Frameshift: ${esc(counts.frameshift)}${renderVariantLinks(pathogenicLinks.frameshift)}</li>
+                                <li>In-frame deletions: ${esc(counts.inframe_del)}${renderVariantLinks(pathogenicLinks.inframe_del)}</li>
+                                <li>Splice site: ${esc(counts.splice)}${renderVariantLinks(pathogenicLinks.splice)}</li>
+                                <li>Benign splice site: ${esc(counts.benign_splice || 0)}${renderVariantLinks(spliceVariantLinks.benign)}</li>
+                            </ul></li>
+                        </ul>`;
                     }
 
-                    const spliceVariantLinks = resItem.splice_variant_links || {};
-                    const pathogenicLinks = resItem.pathogenic_variant_links || {};
-                    const renderVariantLinks = (variants) => {
-                        if (!Array.isArray(variants) || variants.length === 0) return '';
-                        const items = variants.map(v => {
-                            const label = esc(v.id || 'Variant');
-                            if (v.url) return `<a href="${esc(v.url)}" target="_blank" rel="noopener noreferrer">${label}</a>`;
-                            return label;
-                        }).join(', ');
-                        return `<div class="note" style="margin: 0.15em 0 0 0.75em;">${items}</div>`;
-                    };
-                    const benignSpliceLinks = renderVariantLinks(spliceVariantLinks.benign);
-                    const benignSpliceCount = resItem.pathogenic_variant_counts.benign_splice || 0;
-
-                    html += `<ul>
-                                    <li><strong>Fraction of Protein:</strong> ${resItem.frac_cds || 'N/A'}</li>
-                                    <li><strong>Overlapping Protein Domains:</strong> ${domainHTML}</li>
-                                    <li><strong>Tandem Repeat Domains (TReXome DB):</strong>${trexomeGeneHTML}${trexomeHTML}</li>
-                                    <li><strong>Pathogenic Variants in Exon (≥ 2-Star rating on ClinVar):</strong><ul>
-                                        <li>Missense: ${resItem.pathogenic_variant_counts.missense}${renderVariantLinks(pathogenicLinks.missense)}</li>
-                                        <li>Nonsense: ${resItem.pathogenic_variant_counts.nonsense}${renderVariantLinks(pathogenicLinks.nonsense)}</li>
-                                        <li>Frameshift: ${resItem.pathogenic_variant_counts.frameshift}${renderVariantLinks(pathogenicLinks.frameshift)}</li>
-                                        <li>In-frame Deletions: ${resItem.pathogenic_variant_counts.inframe_del}${renderVariantLinks(pathogenicLinks.inframe_del)}</li>
-                                        <li>Splice Site: ${resItem.pathogenic_variant_counts.splice}${renderVariantLinks(pathogenicLinks.splice)}</li>
-                                        <li>Benign Splice Site: ${benignSpliceCount}${benignSpliceLinks}</li>
-                                    </ul></li>
-                                </ul>`;
-                }
-
-                if (strategy === 'Knockdown') {
-                    (function(){
+                    if (strategy === 'Knockdown') {
                         const gene = (data.summary && data.summary.gene) ? data.summary.gene : '';
-                        const origQ = document.getElementById('query').value;
-                        const cdnaMatch = origQ ? origQ.match(/c\.[^\s\)\]]+/i) : null;
+                        const origQ = window.assessedQuery || '';
+                        const cdnaMatch = origQ.match(/c\.[^\s\)\]]+/i);
                         const cdna = cdnaMatch ? cdnaMatch[0] : '';
-                        const refseqMatch = origQ ? origQ.match(/(NM_[0-9]+\.?[0-9]*)/i) : null;
+                        const refseqMatch = origQ.match(/(NM_[0-9]+\.?[0-9]*)/i);
                         const refseq = refseqMatch ? refseqMatch[1] : '';
                         const parts = [];
                         if (gene && cdna) parts.push(`(${gene} AND ${cdna})`);
@@ -1315,240 +1724,189 @@ function displayResults(data) {
                         const prefix = parts.length ? `(${parts.join(' OR ')})` : '';
                         const terms = '((antisense OR ASO) AND (knockdown OR "gene silencing" OR "allele specific" OR "allele-specific"))';
                         const kdQuery = prefix ? `${prefix} AND ${terms}` : terms;
-                        const pmUrl = 'https://pubmed.ncbi.nlm.nih.gov/?term=' + encodeURIComponent(kdQuery);
-                        const kdToggleId = `toggle-${strategy}-pubmed`;
-                        const kdContentId = `content-${strategy}-pubmed`;
-                        const kdResultsId = `pubmed-${strategy}-results`;
-                        html += `
-                        <div class="strategy-block pubmed-accordion">
-                            <div id="${kdToggleId}" class="result-header unable-to-assess accordion-toggle" style="cursor: pointer; user-select: none;">
-                                <h5>PubMed: Knockdown Evidence <span class="chevron">&#9662;</span></h5>
-                            </div>
-                            <div id="${kdContentId}" class="result-block" style="display: none;">
-                                <p><strong>Related PubMed Search:</strong> ${esc(kdQuery)}</p>
-                                <div id="${kdResultsId}" class="pubmed-context" data-query="${esc(kdQuery)}">Loading PubMed results...</div>
-                                <div class="pubmed-footer"><a href="${pmUrl}" target="_blank" rel="noopener noreferrer">Open full results on PubMed</a></div>
-                                <p class="note" style="margin-top:0.5em;">Powered by NCBI E-utilities.</p>
-                            </div>
-                        </div>`;
-                    })();
-                }
-                html += `</div></div>`;
-                }); // End resultsArray.forEach
+                        body += accordion({
+                            id: `${strategy}-pubmed`, title: 'Knockdown literature (PubMed)', level: 'h5', report: false, extraClass: 'pubmed-accordion',
+                            body: pubmedBody(kdQuery, `pubmed-${strategy}-results`, 'Related PubMed search'),
+                        });
+                    }
+
+                    blocks += accordion({ id: uniqueId, title: name, suffix, status: classification, tone, open: isUnderDevN1C, infoHref, body });
+                    overview.push({ target: `toggle-${uniqueId}`, name: name + (suffix ? ' ' + suffix : ''), status: classification, tone });
+                });
             }
         }
-        html += '</div>'; // end #assessments-accordions
-        html += '</div>'; // end .section-block (therapeutic assessments)
+
+        assessmentsHTML = `<section class="section-block" aria-labelledby="assessments-title">
+            <div class="section-header-row"><h3 id="assessments-title">Therapeutic assessments</h3>
+                <div class="expand-controls"><button type="button" class="text-btn" data-action="expand-all" data-target="assessments-accordions">Expand all</button></div></div>
+            <div id="assessments-accordions">${blocks}</div>
+        </section>`;
     }
 
-    // Add Commentary & Download section at the end
-    html += `<div class="strategy-block">
-                <div id="toggle-report" class="result-header unable-to-assess accordion-toggle" style="cursor: pointer; user-select: none;">
-                    <h4>Add Commentary & Download Report <span class="chevron">&#9662;</span></h4>
-                </div>
-                <div id="content-report" class="result-block" style="display: none;">
-                    <h5>Your Commentary</h5>
-                    <textarea id="user-commentary" placeholder="Add your notes, interpretation, or next steps here. This will be included in the downloaded report." style="width: 100%; min-height: 120px; padding: .5em; border-radius: 4px; border: 1px solid #ccc; font-family: inherit; font-size: .95em;"></textarea>
-                    <button id="download-report-btn" type="button" style="margin-top: 1em;">Download HTML Report</button>
-                </div>
-            </div>`;
-    resultsDiv.innerHTML = html;
-
-    // Expand/Collapse wiring, scoped per section (Literature search / Therapeutic Assessments)
-    (function(){
-        function wireToggle(buttonId, containerId) {
-            const toggleBtn = document.getElementById(buttonId);
-            const container = document.getElementById(containerId);
-            if (!toggleBtn || !container) return;
-            toggleBtn.addEventListener('click', () => {
-                const expanding = toggleBtn.dataset.expanded !== 'true';
-                container.querySelectorAll('.result-block').forEach(el => el.style.display = expanding ? 'block' : 'none');
-                container.querySelectorAll('.accordion-toggle').forEach(t => t.classList.toggle('open', expanding));
-                toggleBtn.dataset.expanded = expanding ? 'true' : 'false';
-            });
-        }
-        wireToggle('expand-collapse-literature', 'literature-accordions');
-        wireToggle('expand-collapse-assessments', 'assessments-accordions');
-    })();
-
-    // Restore commentary from session/global state
-    const commentaryTextarea = document.getElementById('user-commentary');
-    if (commentaryTextarea && window.userCommentary) {
-        commentaryTextarea.value = window.userCommentary;
-    }
-    // Save commentary to global state on input
-    if(commentaryTextarea) commentaryTextarea.addEventListener('input', (e) => { window.userCommentary = e.target.value; });
-
-    // Fetch PubMed articles via NCBI E-utilities and render inline
-    (async () => {
-        const container = document.getElementById('pubmed-results');
-        if (!container) return;
-        const gene = container.getAttribute('data-gene');
-        const query = `(${gene}) AND (ASO OR AON OR "Antisense oligonucleotide")`;
-        try {
-            const esearchUrl = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&retmode=json&retmax=20&term=' + encodeURIComponent(query);
-            const esJson = await ncbiFetchJson(esearchUrl);
-            const ids = (esJson.esearchresult && esJson.esearchresult.idlist) || [];
-            if (!ids.length) { container.innerHTML = 'No PubMed results found.'; return; }
-            const esummaryUrl = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&retmode=json&id=' + ids.join(',');
-            const sumJson = await ncbiFetchJson(esummaryUrl);
-            const result = sumJson.result || {};
-            const uids = result.uids || ids;
-            let out = '<ul class="pubmed-list">';
-            for (const uid of uids) {
-                const rec = result[uid];
-                if (!rec) continue;
-                const title = rec.title || '(no title)';
-                const journal = rec.fulljournalname || rec.source || '';
-                const pubdate = rec.pubdate || rec.epubdate || '';
-                const authors = Array.isArray(rec.authors) ? rec.authors.slice(0,3).map(a => a.name).join(', ') : '';
-                const link = `https://pubmed.ncbi.nlm.nih.gov/${uid}/`;
-                out += `<li class="pubmed-card">` +
-                       `<div class="pubmed-title">${esc(title)}</div>` +
-                       `<div class="pubmed-meta">${esc(journal)}${journal && pubdate ? ' &middot; ' : ''}${esc(pubdate)}${authors ? ' &middot; ' + esc(authors) : ''}</div>` +
-                       `<div class="pubmed-card-footer"><a class="pubmed-article-link" href="${link}" target="_blank" rel="noopener noreferrer">View on PubMed</a></div>` +
-                       `</li>`;
-            }
-            out += '</ul>';
-            container.innerHTML = out;
-        } catch (e) {
-            container.innerHTML = 'Unable to load PubMed results. Use the link above.';
-        }
-    })();
-
-    // Render contextual PubMed results for MoA/Splice queries if present
-    (async () => {
-        for (const container of document.querySelectorAll('.pubmed-context')) {
-            const q = container.getAttribute('data-query');
-            if (!q) continue;
-            try {
-                const esearchUrl = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&retmode=json&retmax=20&term=' + encodeURIComponent(q);
-                const esJson = await ncbiFetchJson(esearchUrl);
-                const ids = (esJson.esearchresult && esJson.esearchresult.idlist) || [];
-                if (!ids.length) { container.innerHTML = 'No PubMed results found.'; continue; }
-                const esummaryUrl = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&retmode=json&id=' + ids.join(',');
-                const sumJson = await ncbiFetchJson(esummaryUrl);
-                const result = sumJson.result || {};
-                const uids = result.uids || ids;
-                let out = '<ul class="pubmed-list">';
-                for (const uid of uids) {
-                    const rec = result[uid];
-                    if (!rec) continue;
-                    const title = rec.title || '(no title)';
-                    const journal = rec.fulljournalname || rec.source || '';
-                    const pubdate = rec.pubdate || rec.epubdate || '';
-                    const authors = Array.isArray(rec.authors) ? rec.authors.slice(0,3).map(a => a.name).join(', ') : '';
-                    const link = `https://pubmed.ncbi.nlm.nih.gov/${uid}/`;
-                    out += `<li class="pubmed-card">` +
-                           `<div class="pubmed-title">${esc(title)}</div>` +
-                           `<div class="pubmed-meta">${esc(journal)}${journal && pubdate ? ' &middot; ' : ''}${esc(pubdate)}${authors ? ' &middot; ' + esc(authors) : ''}</div>` +
-                           `<div class="pubmed-card-footer"><a class="pubmed-article-link" href="${link}" target="_blank" rel="noopener noreferrer">View on PubMed</a></div>` +
-                           `</li>`;
-                }
-                out += '</ul>';
-                container.innerHTML = out;
-            } catch (e) {
-                container.innerHTML = 'Unable to load PubMed results. Use the link above.';
-            }
-        }
-    })();
-
-    document.querySelectorAll('.accordion-toggle').forEach(toggle => {
-        toggle.addEventListener('click', function() {
-            const contentId = this.id.replace('toggle-', 'content-');
-            const content = document.getElementById(contentId);
-            const isHidden = content.style.display === 'none'; content.style.display = isHidden ? 'block' : 'none'; this.classList.toggle('open', isHidden);
-        });
+    // ---------- Commentary & report ----------
+    const reportHTML = accordion({
+        id: 'report', title: 'Commentary and report', report: false,
+        body: `<label for="user-commentary"><strong>Your commentary</strong></label>
+            <p class="note">Notes, interpretation or next steps. Included in the downloaded report.</p>
+            <textarea id="user-commentary"></textarea>
+            <div class="report-actions"><button id="download-report-btn" type="button" data-action="download-report">Download report (HTML)</button></div>`,
     });
 
-    if (data.visualization) {
-        renderIGV('igv-container', data.visualization);
+    const overviewHTML = overview.length ? `<nav class="overview" aria-label="Assessment overview">${overview.map((o, i) =>
+        `<button type="button" class="overview__row" data-target="${esc(o.target)}" style="--i:${i}">
+            <span class="overview__name">${esc(o.name)}</span>
+            <span class="chip-status tone-${o.tone}">${esc(o.status)}</span>
+        </button>`).join('')}</nav>` : '';
+
+    resultsDiv.innerHTML = `<h2 class="results-title">Results</h2>
+        <p class="results-query"><span>${esc(window.assessedQuery || '')}</span>
+            <button type="button" class="copy-btn" data-action="copy-query">${COPY_ICON}<span>Copy</span></button></p>
+        ${overviewHTML}${summaryHTML}${igvHTML}${literatureHTML}${assessmentsHTML}${reportHTML}`;
+
+    // Restore commentary from session/global state and keep it current
+    const commentaryTextarea = document.getElementById('user-commentary');
+    if (commentaryTextarea) {
+        commentaryTextarea.value = window.userCommentary || '';
+        commentaryTextarea.addEventListener('input', (e) => {
+            window.userCommentary = e.target.value;
+            try { sessionStorage.setItem('avec_commentary', window.userCommentary); } catch (err) { /* ignore */ }
+        });
     }
+
+    if (opts.keepPlace) {
+        openIds.forEach(id => { const t = document.getElementById(id); if (t) setOpen(t, true, false); });
+        // Assessments whose status changed (or that are new) glow briefly, here and in the overview
+        if (previousStatus.size && !reducedMotion) {
+            resultsDiv.querySelectorAll('#assessments-accordions > .strategy-block button.accordion-toggle').forEach(t => {
+                if (previousStatus.get(t.id) === statusOf(t)) return;
+                t.closest('.strategy-block').classList.add('just-changed');
+                const row = resultsDiv.querySelector(`.overview__row[data-target="${t.id}"]`);
+                if (row) row.classList.add('just-changed');
+            });
+        }
+    }
+
+    // Genome browser: reuse the loaded one when nothing it shows has changed
+    const igvContainer = document.getElementById('igv-container');
+    if (igvContainer) {
+        if (reuseIgv) {
+            igvContainer.replaceWith(oldIgv);
+        } else {
+            window.igvState = vizKey;
+            renderIGV(igvContainer, data.visualization);
+        }
+    } else {
+        window.igvState = null;
+    }
+
+    if (opts.keepPlace) {
+        window.scrollTo(0, scrollY);
+        const anchorEl = opts.anchor && document.getElementById(opts.anchor.id);
+        const block = anchorEl && anchorEl.closest('.strategy-block, .summary-block');
+        if (block) window.scrollBy(0, block.getBoundingClientRect().top - opts.anchor.top);
+    }
+
+    // Literature lists, searched one after another (NCBI rate limit)
+    (async () => {
+        for (const container of resultsDiv.querySelectorAll('.pubmed-context')) {
+            await loadPubmed(container);
+        }
+    })();
 }
 
+// ======================================================================
+// Downloadable HTML report
+// ======================================================================
 function downloadReport() {
-    const query = document.getElementById('query').value;
+    const query = window.assessedQuery || queryInput.value;
     const commentary = document.getElementById('user-commentary').value;
     const timestamp = new Date().toLocaleString();
 
-    let reportHTML = `
-        <!doctype html>
-        <html lang="en">
-        <head>
-            <meta charset="utf-8">
-            <title>AVEC Report: ${esc(query)}</title>
-            <style>
-                body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 2em auto; padding: 0 1em; }
-                h1, h2, h3 { color: #005a9c; border-bottom: 1px solid #eee; padding-bottom: 0.3em; }
-                a { color: #005a9c; }
-                .summary-block, .assessment-block { border: 1px solid #ddd; border-radius: 8px; padding: 1em; margin-bottom: 1.5em; background-color: #f9f9f9; }
-                .summary-block ul { list-style: none; padding: 0; }
-                .summary-block li { margin-bottom: 0.5em; }
-                .assessment-block h3 { margin-top: 0; font-size: 1.2em; }
-                .disclaimer { font-size: 0.8em; color: #777; text-align: center; margin-top: 2em; }
-                .commentary { background-color: #fffbeb; border-color: #fde68a; }
-                pre { background-color: #f0f0f0; border: 1px solid #ddd; border-radius: 4px; padding: 1em; white-space: pre-wrap; word-wrap: break-word; }
-
-                /* Guideline Checks */
-                .checklist { list-style-type: none; padding: 0; }
-                .checklist li { margin-bottom: 0.5em; }
-                .checklist li.pass::before { content: '\\2611'; color: #000; margin-right: 10px; font-weight: bold; }
-                .checklist li.fail::before { content: '\\2610'; color: #000; margin-right: 10px; font-weight: bold; }
-
-                /* Warnings */
-                .warning { color: #dc3545; font-weight: bold; }
-                .note { font-style: italic; color: #555; font-size: 0.9em; }
-            </style>
-        </head>
-        <body>
-            <h1>AVEC Assessment Report</h1>
-            <p><strong>Query:</strong> ${esc(query)}</p>
-            <p><strong>Report Generated:</strong> ${timestamp}</p>
-    `;
+    let reportHTML = `<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>AVEC Report: ${esc(query)}</title>
+    <style>
+        body { font-family: "Geist", Arial, sans-serif; line-height: 1.6; color: #000; max-width: 800px; margin: 2em auto; padding: 0 1em; }
+        h1, h2, h3 { color: #000; border-bottom: 1px solid #c2c2c2; padding-bottom: 0.3em; font-weight: 600; }
+        h1, h2 { text-transform: uppercase; line-height: 1.1; }
+        h1 { border-bottom: 3px solid #ea564f; }
+        h5 { font-size: 1em; margin: 1.2em 0 .4em; }
+        a { color: #000; }
+        code { font-family: Consolas, "Courier New", monospace; font-size: .9em; }
+        .summary-block, .assessment-block { border: 1px solid #000; padding: 1em; margin-bottom: 1.5em; background-color: #fff; }
+        .summary-block ul { list-style: none; padding: 0; }
+        .summary-block li { margin-bottom: 0.5em; }
+        .summary-block li > strong:first-child::after { content: ':'; }
+        .assessment-block h3 { margin-top: 0; font-size: 1.2em; }
+        .disclaimer { font-size: 0.8em; color: #777; text-align: center; margin-top: 2em; }
+        .commentary { background-color: #f0f0f0; }
+        pre { background-color: #f0f0f0; border: 1px solid #c2c2c2; padding: 1em; white-space: pre-wrap; word-wrap: break-word; }
+        .tx-warning, .tx-version { display: block; }
+        .tx-warning { color: #4d3d00; }
+        /* Guideline Checks */
+        .checklist { list-style-type: none; padding: 0; }
+        .checklist li { margin-bottom: 0.5em; }
+        .checklist li.pass::before { content: '\\2611'; color: #000; margin-right: 10px; font-weight: bold; }
+        .checklist li.fail::before { content: '\\2610'; color: #000; margin-right: 10px; font-weight: bold; }
+        .chip { border: 1px solid #000; padding: 0 .5em; font-size: .85em; }
+        .pubmed-list { padding-left: 1.2em; }
+        .pubmed-meta { color: #555; font-size: .9em; }
+        /* Warnings */
+        .warning { color: #c4423b; font-weight: bold; }
+        .note { font-style: italic; color: #555; font-size: 0.9em; }
+    </style>
+</head>
+<body>
+    <h1>AVEC Assessment Report</h1>
+    <p><strong>Query:</strong> ${esc(query)}</p>
+    <p><strong>Report Generated:</strong> ${esc(timestamp)}</p>
+`;
 
     if (commentary) {
         reportHTML += `<div class="summary-block commentary"><h2>User Commentary</h2><pre>${esc(commentary)}</pre></div>`;
     }
 
-    const summaryContent = document.querySelector('.summary-block');
+    const summaryContent = document.querySelector('#results .summary-block');
     if (summaryContent) {
-        reportHTML += `<h2>Query Summary</h2><div class="summary-block">${summaryContent.innerHTML}</div>`;
+        const clone = summaryContent.cloneNode(true);
+        clone.querySelectorAll('h3, button').forEach(el => el.remove());
+        reportHTML += `<h2>Query Summary</h2><div class="summary-block">${clone.innerHTML}</div>`;
     }
 
     // Varaico link (direct link to variant-specific literature)
     const varaicoLink = document.querySelector('#literature-accordions a[title*="Varaico"]');
     if (varaicoLink) {
-        reportHTML += `<div class="assessment-block"><h3>Varaico</h3><p><a href="${varaicoLink.href}" target="_blank" rel="noopener noreferrer">${varaicoLink.href}</a></p></div>`;
+        reportHTML += `<div class="assessment-block"><h3>Varaico</h3><p><a href="${esc(varaicoLink.href)}" target="_blank" rel="noopener noreferrer">${esc(varaicoLink.href)}</a></p></div>`;
     }
-
     // LitVar2 link (publications mentioning this variant, keyed by its dbSNP rsID)
     const litvarLink = document.querySelector('#literature-accordions a[title*="LitVar2"]');
     if (litvarLink) {
-        reportHTML += `<div class="assessment-block"><h3>LitVar2</h3><p><a href="${litvarLink.href}" target="_blank" rel="noopener noreferrer">${litvarLink.href}</a></p></div>`;
+        reportHTML += `<div class="assessment-block"><h3>LitVar2</h3><p><a href="${esc(litvarLink.href)}" target="_blank" rel="noopener noreferrer">${esc(litvarLink.href)}</a></p></div>`;
     }
 
     reportHTML += `<h2>Therapeutic Assessments</h2>`;
-    document.querySelectorAll('.strategy-block').forEach(block => {
-        // Exclude the commentary/download block itself from the report
-        if (block.querySelector('#toggle-report')) return;
-        const header = block.querySelector('.result-header h4');
-        // Skip interactive selection blocks (MOI override, MoA selection) in assessments
-        if (header && (header.innerText.includes('Mode of Inheritance') || header.innerText.includes('Mechanism of Action'))) return;
+    // Interactive selection blocks (MOI override, MoA selection) and the report block itself carry no data-report-title
+    document.querySelectorAll('#results .strategy-block[data-report-title]').forEach(block => {
         const content = block.querySelector('.result-block');
-        if (header && content) {
-            const headerText = header.innerText.replace('▼', '').replace('▲', '').replace('&#9662;', '').replace('&#9652;', '').trim();
-            // Clone so nested accordions (e.g. PubMed evidence) can be force-expanded for the static report
-            const clone = content.cloneNode(true);
-            clone.querySelectorAll('.result-block').forEach(el => { el.style.display = 'block'; });
-            clone.querySelectorAll('.accordion-toggle').forEach(el => el.classList.add('open'));
-            // Awaiting-input prompts (e.g. Splice Switching: Awaiting Validation) have live Yes/No buttons
-            // that don't work in a static report — replace them with an explicit "no input given" note.
-            const promptButtons = clone.querySelector('.splice-prompt-buttons');
-            if (promptButtons && headerText.includes('Awaiting')) {
-                promptButtons.outerHTML = '<p class="warning"><strong>No user input was provided for this question before the report was generated.</strong></p>';
-            }
-            reportHTML += `<div class="assessment-block"><h3>${headerText}</h3>${clone.innerHTML}</div>`;
+        if (!content) return;
+        const status = block.dataset.reportStatus;
+        const headerText = block.dataset.reportTitle + (status ? `: ${status}` : '');
+        // Clone so nested accordions (e.g. PubMed evidence) can be force-expanded for the static report
+        const clone = content.cloneNode(true);
+        clone.querySelectorAll('[hidden]').forEach(el => el.removeAttribute('hidden'));
+        clone.querySelectorAll('.override-controls, .acc-icon, .checks-meter, .skeleton').forEach(el => el.remove());
+        clone.querySelectorAll('.checklist li').forEach(li => { li.removeAttribute('tabindex'); li.removeAttribute('role'); });
+        clone.querySelectorAll('p.note').forEach(p => { if (p.textContent.startsWith('Select a check')) p.remove(); });
+        // Awaiting-input prompts (e.g. Splice correction: Awaiting Validation) have live Yes/No buttons
+        // that don't work in a static report — replace them with an explicit "no input given" note.
+        const promptButtons = clone.querySelector('.splice-prompt-buttons');
+        if (promptButtons && headerText.includes('Awaiting')) {
+            promptButtons.outerHTML = '<p class="warning"><strong>No user input was provided for this question before the report was generated.</strong></p>';
         }
+        clone.querySelectorAll('button').forEach(b => b.replaceWith(document.createTextNode(b.textContent)));
+        reportHTML += `<div class="assessment-block"><h3>${esc(headerText)}</h3>${clone.innerHTML}</div>`;
     });
 
     reportHTML += `<p class="disclaimer">This tool is for informational purposes only and is not for clinical use. Results require manual verification.</p></body></html>`;
@@ -1563,9 +1921,5 @@ function downloadReport() {
     URL.revokeObjectURL(a.href);
 }
 </script>
-        <p class="disclaimer">Disclaimer: This tool does not serve as Medical Advice. Although the content of these webpages may partly be provided by individuals in the medical profession, you acknowledge that provision of such content does not create a medical professional-patient relationship and does not constitute an opinion, medical advice, professional diagnosis, service or treatment of any condition. The access to general information is provided for educational purposes only, through this site and links to other sites. The content is not recommended or endorsed by any doctor or healthcare provider. The information and content provided are not substitutes for medical or professional care, and the information is not to be used in place of a visit, call, consultation or the advice of your physician or other healthcare provider. We are not liable or responsible for any advice, course of treatment, diagnosis or any other information, services or product obtained through this site.</p>
-        <p class="disclaimer" style="margin-top:.5em; border-top:none; padding-top:0;"><a href="https://uni-koeln.de/en/site-notice" target="_blank" rel="noopener noreferrer">Site notice</a> (<a href="https://uni-koeln.de/impressum" target="_blank" rel="noopener noreferrer" lang="de">Impressum</a>) &middot; <a href="https://uni-koeln.de/en/privacy-protection-statement" target="_blank" rel="noopener noreferrer">Privacy</a> (<a href="https://uni-koeln.de/datenschutz" target="_blank" rel="noopener noreferrer" lang="de">Datenschutz</a>) &middot; <a href="/about#data-processing">Data processing &amp; third-party services</a></p>
-    </main>
 </body>
 </html>
-    
