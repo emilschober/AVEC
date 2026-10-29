@@ -30,7 +30,7 @@ HEADERS = {"Content-Type": "application/json", "Accept": "application/json"}
 NCBI_EUTILS = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
 # Optional NCBI E-utilities API key (raises NCBI's rate limit from 3 to 10 requests/s) and contact
 # e-mail, which NCBI asks registered tools to send; both are read from the environment.
-NCBI_API_KEY = "adccf82ff774c8b93f33543c93c789d81108"
+NCBI_API_KEY = #insert API-Key Here to accelerate the ensembl requests
 NCBI_EMAIL = os.environ.get("NCBI_EMAIL") or None
 NCBI_TOOL = "AVEC"
 # ClinVar esummary returns at most 500 records per request; larger regions are fetched page by
