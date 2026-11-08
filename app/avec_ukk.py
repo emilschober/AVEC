@@ -769,7 +769,7 @@ class EnsemblClient:
         # Ensembl reference data instead of re-fetching it.
         return _ENSEMBL_LOOKUP_CACHE.get_or_set(key, fetch)
 
-    def _get(self, path, params=None, max_retries=5, label=None):
+    def _get(self, path, params=None, max_retries=5, label=None, timeout=120):
         url = f"{self.base_url}{path}"
         backoff = 1.0
         _t0 = time.perf_counter()
@@ -778,7 +778,7 @@ class EnsemblClient:
                 time.sleep(self.delay)
                 try:
                     with _ENSEMBL_CONCURRENCY:
-                        resp = self.session.get(url, params=params, timeout=120)
+                        resp = self.session.get(url, params=params, timeout=timeout)
                     if resp.status_code == 200:
                         try: return resp.json()
                         except ValueError: return resp.text
@@ -3408,19 +3408,90 @@ def _assess_for_transcript(
 # Each lookup is cached for a day in _ENSEMBL_LOOKUP_CACHE, which never memoizes a failure's None,
 # so a source that can't be reached is retried by a later assessment. None of them may fail one.
 
+# Ensembl's /info services fail on their own at times: on 2026-11-08 /info/data, /info/ping and the
+# like all answered HTTP 500 (or timed out) for hours while lookups and VEP kept working. So the
+# release lookup runs on a short timeout, pauses after a failure instead of costing every
+# assessment another attempt, and falls back as described in _ensembl_rest_version.
+ENSEMBL_INFO_TIMEOUT_SECONDS = 10
+ENSEMBL_RELEASE_RETRY_SECONDS = 600
+# The last release /info/data reported, {"release", "confirmed_at"}; stands in while it is down
+_ensembl_last_release: Optional[Dict[str, Any]] = None
+# time.monotonic() of the last failed /info/data lookup, None after a success
+_ensembl_release_failed_at: Optional[float] = None
+
 def _ensembl_rest_release() -> Optional[int]:
-    """The Ensembl release the REST API serves (VEP, lookups, overlaps), e.g. 116."""
+    """The Ensembl release the REST API serves (VEP, lookups, overlaps), e.g. 116, or None when
+    /info/data can't be read (not retried for ENSEMBL_RELEASE_RETRY_SECONDS after a failure)."""
     def fetch():
-        try:
-            data = EnsemblClient()._get("/info/data", max_retries=2, label="Ensembl: release")
-        except requests.RequestException:
+        global _ensembl_last_release, _ensembl_release_failed_at
+        if _ensembl_release_failed_at is not None and time.monotonic() - _ensembl_release_failed_at < ENSEMBL_RELEASE_RETRY_SECONDS:
             return None
+        try:
+            # One attempt: a failure is retried after the pause, not within this assessment
+            data = EnsemblClient()._get("/info/data", max_retries=1, label="Ensembl: release", timeout=ENSEMBL_INFO_TIMEOUT_SECONDS)
+        except requests.RequestException:
+            data = None
         releases = data.get('releases') if isinstance(data, dict) else None
         try:
-            return max(int(r) for r in releases) if releases else None
+            release = max(int(r) for r in releases) if releases else None
         except (TypeError, ValueError):
+            release = None
+        if release is None:
+            _ensembl_release_failed_at = time.monotonic()
             return None
+        _ensembl_release_failed_at = None
+        _ensembl_last_release = {"release": release, "confirmed_at": _now_iso()}
+        return release
     return _ENSEMBL_LOOKUP_CACHE.get_or_set(('ensembl_rest_release',), fetch)
+
+def _ensembl_assembly() -> Optional[Dict[str, Any]]:
+    """{assembly, geneset} from /info/assembly, e.g. GRCh38.p14 with the gene set of 2025-11. It
+    carries no release number but does name the annotation, and it kept answering while the
+    other /info endpoints were down."""
+    def fetch():
+        try:
+            data = EnsemblClient()._get("/info/assembly/homo_sapiens", max_retries=2, label="Ensembl: assembly",
+                                        timeout=ENSEMBL_INFO_TIMEOUT_SECONDS)
+        except requests.RequestException:
+            return None
+        if not isinstance(data, dict) or not data.get('assembly_name'):
+            return None
+        return {"assembly": data['assembly_name'], "geneset": data.get('genebuild_last_geneset_update')}
+    return _ENSEMBL_LOOKUP_CACHE.get_or_set(('ensembl_assembly',), fetch)
+
+def _ensembl_rest_version() -> Optional[Dict[str, Any]]:
+    """What identifies the Ensembl data behind a result: {"release"} from /info/data; while that
+    is down, the last release this process saw, {"release", "confirmed_at"}; failing that (e.g.
+    right after a restart), the assembly and gene-set date, {"assembly", "geneset"}; else None."""
+    release = _ensembl_rest_release()
+    if release is not None:
+        return {"release": release}
+    if _ensembl_last_release:
+        return dict(_ensembl_last_release)
+    return _ensembl_assembly()
+
+def _short_time(iso: Optional[str]) -> str:
+    """'2026-11-08T09:12:40+01:00' -> '2026-11-08 09:12 UTC+01:00', for times quoted in text."""
+    try:
+        moment = datetime.fromisoformat(str(iso))
+    except (TypeError, ValueError):
+        return str(iso or '')
+    offset = moment.strftime('%z')
+    return moment.strftime('%Y-%m-%d %H:%M') + (f" UTC{offset[:3]}:{offset[3:]}" if offset else "")
+
+def _ensembl_rest_row_version(info: Optional[Dict[str, Any]]) -> Tuple[Optional[str], Optional[str]]:
+    """(version, note) of the Ensembl REST row for a _ensembl_rest_version answer."""
+    if not info:
+        return None, None
+    unanswered = "Ensembl's release service did not answer during this assessment"
+    if info.get("release") is not None:
+        if info.get("confirmed_at"):
+            return f"Ensembl {info['release']} (last confirmed {_short_time(info['confirmed_at'])})", unanswered
+        return f"Ensembl {info['release']}", None
+    if info.get("assembly"):
+        geneset = f", gene set of {info['geneset']}" if info.get("geneset") else ""
+        return f"{info['assembly']}{geneset}", f"{unanswered}, so the release number is unknown"
+    return None, None
 
 def _ensembl_platform_release() -> Optional[Dict[str, Any]]:
     """{release_number, release_date} of the GRCh38 genome on Ensembl's new platform (GraphQL +
@@ -3453,7 +3524,7 @@ def _ncbi_db_info(db: str) -> Optional[Dict[str, Any]]:
 
 # Run alongside an assessment (see process_single_variant); keys are those _build_provenance reads
 _RELEASE_LOOKUPS = {
-    'ensembl_rest': _ensembl_rest_release,
+    'ensembl_rest': _ensembl_rest_version,
     'ensembl_platform': _ensembl_platform_release,
     'clinvar': lambda: _ncbi_db_info('clinvar'),
     'pubmed': lambda: _ncbi_db_info('pubmed'),
@@ -3502,7 +3573,8 @@ def _build_provenance(results: List[Dict[str, Any]], assessed_at: str, releases:
     knockdown_results = [k for res in results for k in _knockdown_results(res)]
     summaries = [res.get("summary") or {} for res in results]
 
-    ensembl_release = releases.get('ensembl_rest')
+    ensembl = releases.get('ensembl_rest') or {}
+    ensembl_version, ensembl_note = _ensembl_rest_row_version(ensembl)
     platform = releases.get('ensembl_platform') or {}
     platform_version = None
     if platform.get('release_number') is not None:
@@ -3537,7 +3609,8 @@ def _build_provenance(results: List[Dict[str, Any]], assessed_at: str, releases:
         live("Ensembl REST API and VEP",
              "Variant consequences, transcripts and exons, protein domains, overlapping genes, "
              "variants in the exon with their ClinVar significance",
-             f"Ensembl {ensembl_release}" if ensembl_release else None, url="https://rest.ensembl.org", publishes_version=True),
+             ensembl_version, url="https://rest.ensembl.org", note=ensembl_note, publishes_version=True,
+             release=ensembl.get("release")),
         live("Ensembl GraphQL and refget",
              "Genomic and coding sequences (stop codons on skipping, indel alignment)",
              platform_version, status="used" if exon_results else "as needed", url="https://www.ensembl.org", publishes_version=True),
