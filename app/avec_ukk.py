@@ -1,13 +1,16 @@
 import os
 import sys
+import queue
+import hashlib
 import traceback
-from flask import Flask, request, jsonify, send_from_directory, abort
+from flask import Flask, Response, request, jsonify, send_from_directory, abort
 import time
 import re
 import requests
 import threading
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from decimal import Decimal, getcontext
 from typing import Dict, Any, Optional, Tuple, List
 from Bio.Seq import Seq
@@ -16,6 +19,12 @@ from html import escape
 from urllib.parse import urlencode, urljoin, quote
 
 # ===== CONFIGURATION =====
+# AVEC's own version, stated in every report and API response (see _build_provenance). Raise the
+# version and the date together whenever a changed avec_ukk.py or docs/ goes live.
+AVEC_VERSION = "1.0.0"
+AVEC_RELEASE_DATE = "2026-11-08"
+GUIDELINES_VERSION = "N1C VARIANT Guidelines 2.0 (July 2026)"
+
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DOCS_DIR = os.path.abspath(os.path.join(_BASE_DIR, '../docs'))
 ENSEMBL_REST = "https://rest.ensembl.org"
@@ -30,7 +39,7 @@ HEADERS = {"Content-Type": "application/json", "Accept": "application/json"}
 NCBI_EUTILS = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
 # Optional NCBI E-utilities API key (raises NCBI's rate limit from 3 to 10 requests/s) and contact
 # e-mail, which NCBI asks registered tools to send; both are read from the environment.
-NCBI_API_KEY = #insert API-Key Here to accelerate the ensembl requests
+NCBI_API_KEY = os.environ.get("NCBI_API_KEY") or None
 NCBI_EMAIL = os.environ.get("NCBI_EMAIL") or None
 NCBI_TOOL = "AVEC"
 # ClinVar esummary returns at most 500 records per request; larger regions are fetched page by
@@ -46,14 +55,30 @@ MIN_REVIEW_STARS = 2
 # Longest accepted variant query. Real HGVS input is far shorter; the cap also keeps
 # parse_hgvs_query's regexes (quadratic on long input without a colon) cheap.
 MAX_QUERY_LENGTH = 200
-# Only these file types are served from DOCS_DIR under /static/ (logo, figures); everything else
-# there, notably docs/data with the underlying databases, stays private.
-STATIC_ASSET_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.svg', '.ico', '.webp'}
+# Only these file types are served from DOCS_DIR under /static/ (logo, figures, the shared
+# stylesheet and script); everything else there, notably docs/data with the underlying
+# databases, stays private.
+IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.svg', '.ico', '.webp'}
+STATIC_ASSET_EXTENSIONS = IMAGE_EXTENSIONS | {'.css', '.js'}
+# Set explicitly: the Windows registry can map .js to text/plain, which browsers refuse to run
+ASSET_MIMETYPES = {'.css': 'text/css', '.js': 'text/javascript', '.woff2': 'font/woff2'}
 # Figures of the N1C VARIANT guidelines page (docs/guidelines.html), served under /guidelines/images/
 GUIDELINES_IMAGES_DIR = os.path.join(DOCS_DIR, 'images-N1CVARIANTGuidelines2.0')
+# The N1C VARIANT guidelines document in DOCS_DIR, offered for download on the guidelines page
+GUIDELINES_PDF = 'N1C VARIANT Guidelines 2.0.pdf'
+# Self-hosted web fonts (SIL OFL), served under /fonts/
+FONTS_DIR = os.path.join(DOCS_DIR, 'fonts')
 
 TREXOME_API_BASE = "https://tandem-repeat-domain-database.onrender.com"
 TREXOME_FRONTEND_BASE = "https://trexomedb.rnatherapy.nl"
+
+# HAWK-EYE (SickKids) exon-skipping assessments and ASO candidates. The documented REST API
+# (https://hawk-eye.research.sickkids.ca/api) covers exon skipping only; the knockdown figures
+# shown alongside it come from the same server's GraphQL endpoint, which the HAWK-EYE site itself
+# uses and which is the only source for them.
+HAWKEYE_API_BASE = "https://hawk-eye.research.sickkids.ca/flask/api/v1/exon-skipping"
+HAWKEYE_GRAPHQL_URL = "https://hawk-eye.research.sickkids.ca/flask/graphql"
+HAWKEYE_FRONTEND_BASE = "https://hawk-eye.research.sickkids.ca"
 
 REVIEW_STATUS_TO_STARS = {
     "no assertion provided": 0,
@@ -76,6 +101,13 @@ N1C_RETRY_SECONDS = 10 * 60
 N1C_UNAVAILABLE_NOTE = "N1C registry currently unavailable; existing-ASO matches may be missing."
 _N1C_REFRESH_LOCK = threading.Lock()
 _n1c_last_attempt: float = 0.0
+# When each N1C table in use was fetched, and its row count ('projects', 'assessed'); a failed
+# refresh keeps the older table, and with it the older entry here
+_n1c_loaded: Dict[str, Dict[str, Any]] = {}
+
+def _now_iso() -> str:
+    """The current local time with its UTC offset, to the second (e.g. 2026-11-08T14:05:09+01:00)."""
+    return datetime.now().astimezone().isoformat(timespec='seconds')
 # Global DataFrames to be loaded at startup
 clingen_df: Optional[pd.DataFrame] = None
 splicevar_df: Optional[pd.DataFrame] = None
@@ -99,18 +131,83 @@ N1C_SUPP_DISPLAY_COLUMNS = [
     'high_confidence_ouORF_removed_by_skipping',
 ]
 
+# The databases bundled in docs/data. The files carry no version of their own (their dates only
+# record when they were copied), so each release is written down here; replace the file and its
+# entry together. load_databases() reads its paths from this table and adds each file's SHA-256
+# and row count to _bundled_provenance, which every report states (see _build_provenance).
+DATA_DIR = os.path.join(DOCS_DIR, 'data')
+BUNDLED_DATA_SOURCES: Dict[str, Dict[str, Any]] = {
+    'clingen': {
+        "name": "ClinGen Curation Activity Summary Report",
+        "file": "Clingen-Curation-Activity-Summary-Report-2026-09-21.csv",
+        "provides": "Mode of inheritance, haploinsufficiency and triplosensitivity curations",
+        "version": "Report of 2026-09-21",
+        "url": "https://search.clinicalgenome.org/kb/downloads",
+    },
+    'splicevardb': {
+        "name": "SpliceVarDB",
+        "file": "SpliceVarDbHgvs.xlsx",
+        "provides": "Experimentally tested splice-altering variants (splice correction)",
+        "version": "Download of 2025-10-09",
+        "url": "https://splicevardb.org",
+    },
+    'sscvdb': {
+        "name": "SSCVDB",
+        "file": "SSCVDB_hgvs.xlsx",
+        "provides": "Splice-altering variants (splice correction)",
+        "version": "1.1",
+        "url": "https://sscvdb.io",
+    },
+    'n1c_supp': {
+        "name": "N1C supplementary table: Combined TANGO Approaches",
+        "file": "Supp File for Combined TANGO Approaches (May2026).xlsx",
+        "provides": "uORFs, natural antisense transcripts, poison and NMD exons (WT upregulation)",
+        "version": "May 2026",
+        "url": None,
+    },
+    'rcnv': {
+        "name": "rCNV gene dosage scores",
+        "file": "rCNV.gene_scores.tsv",
+        "provides": "pHaplo and pTriplo dosage sensitivity scores",
+        "version": "Collins et al., Cell 2022",
+        "url": "https://doi.org/10.1016/j.cell.2022.06.036",
+    },
+}
+# Per BUNDLED_DATA_SOURCES key: {"loaded", "rows", "sha256"} of the file actually read at startup
+_bundled_provenance: Dict[str, Dict[str, Any]] = {}
+
+def _bundled_path(key: str) -> str:
+    return os.path.join(DATA_DIR, BUNDLED_DATA_SOURCES[key]["file"])
+
+def _file_sha256(path: str) -> Optional[str]:
+    """First 12 hex digits of a file's SHA-256: enough to tell two copies of a database apart."""
+    try:
+        digest = hashlib.sha256()
+        with open(path, 'rb') as f:
+            for chunk in iter(lambda: f.read(1 << 20), b''):
+                digest.update(chunk)
+        return digest.hexdigest()[:12]
+    except OSError:
+        return None
+
+def _record_bundled_file(key: str, df: Optional[pd.DataFrame]) -> None:
+    """Notes what was loaded from one bundled file, for the reports' data-source table."""
+    _bundled_provenance[key] = {
+        "loaded": df is not None,
+        "rows": int(len(df)) if df is not None else None,
+        "sha256": _file_sha256(_bundled_path(key)),
+    }
+
 # --- Data Loading ---
 def load_databases():
     """
     Loads all necessary data files and fetches N1C registry data
     into global pandas DataFrames.
     """
-    DATA_DIR = os.path.join(DOCS_DIR, 'data')
-
-    clingen_path = os.path.join(DATA_DIR, 'Clingen-Curation-Activity-Summary-Report-2026-09-21.csv')
-    splicevar_path = os.path.join(DATA_DIR, 'SpliceVarDbHgvs.xlsx')
-    sscvdb_path = os.path.join(DATA_DIR, 'SSCVDB_hgvs.xlsx')
-    n1c_supp_path = os.path.join(DATA_DIR, 'Supp File for Combined TANGO Approaches (May2026).xlsx')
+    clingen_path = _bundled_path('clingen')
+    splicevar_path = _bundled_path('splicevardb')
+    sscvdb_path = _bundled_path('sscvdb')
+    n1c_supp_path = _bundled_path('n1c_supp')
 
     global clingen_df, splicevar_df, sscvdb_df, n1c_supp_df, rcnv_df
     try:
@@ -149,7 +246,7 @@ def load_databases():
 
         _load_n1c_tables()
 
-        rcnv_path = os.path.join(DATA_DIR, 'rCNV.gene_scores.tsv')
+        rcnv_path = _bundled_path('rcnv')
         if os.path.exists(rcnv_path):
             rcnv_df = pd.read_csv(rcnv_path, sep='\t')
             # Standardize gene column for matching
@@ -157,6 +254,10 @@ def load_databases():
                 rcnv_df['gene'] = rcnv_df['gene'].astype(str).str.strip().str.upper()
         else:
             print(f"Warning: rCNV file not found at {rcnv_path}")
+
+        for key, df in (('clingen', clingen_df), ('splicevardb', splicevar_df), ('sscvdb', sscvdb_df),
+                        ('n1c_supp', n1c_supp_df), ('rcnv', rcnv_df)):
+            _record_bundled_file(key, df)
 
     except Exception as e:
         traceback.print_exc()
@@ -196,10 +297,12 @@ def _load_n1c_tables() -> None:
     _n1c_last_attempt = time.monotonic()
     try:
         n1c_variants_df = _fetch_n1c_variants()
+        _n1c_loaded['projects'] = {"loaded_at": _now_iso(), "rows": int(len(n1c_variants_df))}
     except Exception as e:
         print(f"Warning: Could not load N1C registry: {e}")
     try:
         n1c_assessed_df = _fetch_n1c_assessed()
+        _n1c_loaded['assessed'] = {"loaded_at": _now_iso(), "rows": int(len(n1c_assessed_df))}
     except Exception as e:
         print(f"Warning: Could not load N1C assessed variants: {e}")
 
@@ -590,10 +693,18 @@ class _TTLCache:
 # reassessment triggered by a MOI/pathomechanism override) are served from memory instead
 # of hitting Ensembl again.
 _ENSEMBL_LOOKUP_CACHE = _TTLCache(maxsize=2000, ttl_seconds=24 * 3600)
-# TReXome only annotates notes, and its host (onrender) can be slow or asleep. Its lookups
-# cache "no data" and failures alike (as empty results), for one hour, so an outage costs
-# one slow request per gene per hour instead of stalling every assessment on retries.
+# TReXome repeats count as protein domains in the exon-skipping assessment, but its host
+# (onrender) can be slow or asleep. Its lookups cache "no data" and failures alike (the latter
+# as _TREXOME_UNAVAILABLE, flagged in the exon note), for one hour, so an outage costs one slow
+# request per gene per hour instead of stalling every assessment on retries.
 _TREXOME_CACHE = _TTLCache(maxsize=500, ttl_seconds=3600)
+_TREXOME_UNAVAILABLE = object()
+# HAWK-EYE lookups cache "no record for this exon" and outright failures alike (the latter as
+# _HAWKEYE_UNAVAILABLE, flagged in the exon result) for one hour, on the same reasoning as
+# _TREXOME_CACHE: a HAWK-EYE outage costs one slow request per exon per hour, not one per
+# assessment. Its data is a static release, so an hour-old answer is never stale.
+_HAWKEYE_CACHE = _TTLCache(maxsize=500, ttl_seconds=3600)
+_HAWKEYE_UNAVAILABLE = object()
 
 # Shared across requests: pure connection-pooling/rate-limiting infrastructure. Holds
 # open sockets and an in-flight-request counter only.
@@ -618,6 +729,10 @@ _PAIR_EXECUTOR = ThreadPoolExecutor(max_workers=4)
 # _assess_for_transcript). Its host (onrender) can take tens of seconds to wake up, so it gets
 # its own pool: a slow TReXome must not occupy the _IO_EXECUTOR workers other lookups need.
 _TREXOME_EXECUTOR = ThreadPoolExecutor(max_workers=16)
+# HAWK-EYE's endpoints take a few seconds each, and tens of seconds when its server is cold, so
+# they get their own pool too: the per-exon lookup is started at the top of assess_single_exon and
+# collected at the end, and the gene-level knockdown lookup is prefetched in _assess_for_transcript.
+_HAWKEYE_EXECUTOR = ThreadPoolExecutor(max_workers=8)
 # Fetches the pages of a large ClinVar region lookup side by side. The lookup itself may run on
 # _IO_EXECUTOR, so the pages get their own pool (they submit nothing further); NCBI's rate limit
 # is respected by _NCBI_CONCURRENCY inside _ncbi_request.
@@ -628,6 +743,18 @@ def _log_timing(label: str, start: float) -> None:
     (endpoint/purpose), never per-request content (gene symbol, HGVS, IDs) - this is
     stdout-only diagnostic output, not a persisted log, but keep it that way regardless."""
     print(f"[TIMING] {label}: {(time.perf_counter() - start) * 1000:.1f} ms", flush=True)
+
+# Progress of the assessment running on the current thread, shown live by the web frontend
+# (see /assess/stream). Only the thread running process_single_variant reports; pool workers
+# and callers without a reporter (/assess, the API, tests) make _progress a no-op.
+_PROGRESS = threading.local()
+
+def _progress(step: str, label: str) -> None:
+    """Reports that the assessment is starting `step` (a stable id the frontend orders its
+    progress bar by) with a human-readable `label` describing what is being queried."""
+    report = getattr(_PROGRESS, 'report', None)
+    if report:
+        report(step, label)
 
 class EnsemblClient:
     def __init__(self, base_url=ENSEMBL_REST, delay=0.1):
@@ -854,7 +981,7 @@ def _evaluate_splice_variant_position(
     if overrides.get('ASO already exists', False):
         return {
             "classification": "Eligible",
-            "reason": "User confirms an ASO for this variant already exists, therefore it is eligible for splice switching.",
+            "reason": "User confirms an ASO for this variant already exists, therefore it is eligible for splice correction.",
             "checks": {
                 "ASO already exists": {"passed": True, "original_passed": False, "overridden": True}
             }
@@ -1289,9 +1416,10 @@ def _trexome_detail_url(uniprot_id: Optional[str]) -> Optional[str]:
         return None
     return f"{TREXOME_FRONTEND_BASE}/detail.html?id={uniprot_id}"
 
-def _trexome_repeats_for_gene(gene_symbol: str) -> Tuple[Dict[str, Any], ...]:
+def _trexome_repeats_for_gene(gene_symbol: str) -> Optional[Tuple[Dict[str, Any], ...]]:
     """Fetches and caches every repeat-exon match row for a gene from TReXome DB's /api/repeats (paginated).
-    A failed page yields no rows rather than a partial list, cached for _TREXOME_CACHE's short TTL."""
+    Returns None if TReXome couldn't be reached: a failed page yields no rows rather than a partial
+    list, and that outcome is cached too, for _TREXOME_CACHE's short TTL."""
     if not gene_symbol:
         return tuple()
     def fetch():
@@ -1300,12 +1428,13 @@ def _trexome_repeats_for_gene(gene_symbol: str) -> Tuple[Dict[str, Any], ...]:
         while True:
             data = _trexome_request("/api/repeats", {"gene": gene_symbol, "page": page, "page_size": 200})
             if not data:
-                return tuple()
+                return _TREXOME_UNAVAILABLE
             all_rows.extend(data.get("results") or [])
             if page >= data.get("total_pages", 1):
                 return tuple(all_rows)
             page += 1
-    return _TREXOME_CACHE.get_or_set(('trexome_repeats', gene_symbol), fetch)
+    rows = _TREXOME_CACHE.get_or_set(('trexome_repeats', gene_symbol), fetch)
+    return None if rows is _TREXOME_UNAVAILABLE else rows
 
 def _trexome_overlap_percentage(row: Dict[str, Any]) -> Optional[float]:
     """Extracts the exon/repeat overlap percentage for a repeat-exon match row. TReXome DB only
@@ -1325,18 +1454,21 @@ def _trexome_overlap_percentage(row: Dict[str, Any]) -> Optional[float]:
         pass
     return None
 
-def get_trexome_repeats_for_exon(gene_symbol: Optional[str], chrom: Optional[str], exon_start: Optional[int], exon_end: Optional[int]) -> List[Dict[str, Any]]:
+def get_trexome_repeats_for_exon(gene_symbol: Optional[str], chrom: Optional[str], exon_start: Optional[int], exon_end: Optional[int]) -> Optional[List[Dict[str, Any]]]:
     """Returns TReXome DB tandem repeat domain records overlapping a specific exon, identified by
-    genomic coordinates rather than Ensembl exon ID. Matching on the exon's own (chrom, start, end)
-    against TReXome's flattened exon_start/exon_end is more robust than comparing exon_id strings,
-    since TReXome may index a different (but coordinate-identical) transcript than the one chosen
-    here, or a different Ensembl release where the same exon was assigned a different stable ID."""
+    genomic coordinates rather than Ensembl exon ID, or None if TReXome couldn't be reached.
+    Matching on the exon's own (chrom, start, end) against TReXome's flattened exon_start/exon_end
+    is more robust than comparing exon_id strings, since TReXome may index a different (but
+    coordinate-identical) transcript than the one chosen here, or a different Ensembl release
+    where the same exon was assigned a different stable ID."""
     if not gene_symbol or not chrom or exon_start is None or exon_end is None:
         return []
     norm_chrom = str(chrom).strip().lower()
     if not norm_chrom.startswith('chr'):
         norm_chrom = f"chr{norm_chrom}"
     rows = _trexome_repeats_for_gene(gene_symbol)
+    if rows is None:
+        return None
     seen = set()
     repeats = []
     for r in rows:
@@ -1361,6 +1493,24 @@ def get_trexome_repeats_for_exon(gene_symbol: Optional[str], chrom: Optional[str
         })
     return repeats
 
+def _trexome_domain_details(trexome_repeats: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Formats TReXome DB tandem repeats as domain_details entries, so they count as domains alongside Ensembl's."""
+    details = []
+    for r in trexome_repeats:
+        name = f"{r['repeat_type']} tandem repeat" if r.get('repeat_type') else "Tandem repeat"
+        start, end = r.get('protein_start'), r.get('protein_end')
+        span = f", aa {start}-{end}" if start is not None and end is not None else ""
+        details.append({
+            "label": f"{name}{span} (TReXome DB)",
+            "name": name,
+            "source": "TReXome DB",
+            "id": r.get('uniprot_id'),
+            "url": r.get('url'),
+            "start": start,
+            "end": end,
+        })
+    return details
+
 def get_trexome_gene_repeat_summary(gene_symbol: str) -> Dict[str, Any]:
     """Fetches a gene-level tandem repeat domain summary (total repeat count across the gene's
     annotated proteins, repeat types present, and a representative TReXome DB link) via /api/proteins."""
@@ -1378,6 +1528,244 @@ def get_trexome_gene_repeat_summary(gene_symbol: str) -> Dict[str, Any]:
             "url": _trexome_detail_url(results[0].get('uniprot_id')),
         }
     return dict(_TREXOME_CACHE.get_or_set(('trexome_summary', gene_symbol), fetch))
+
+# ===== HAWK-EYE (exon-skipping assessments, ASO candidates, knockdown targets) =====
+
+def _hawkeye_request(endpoint: str, params: Dict[str, Any], max_retries: int = 3) -> Optional[Dict[str, Any]]:
+    """GETs a HAWK-EYE REST endpoint, retrying on transient errors. Returns the parsed JSON body,
+    or None on failure. 4xx responses are not retried: a rejected parameter won't fix itself."""
+    url = f"{HAWKEYE_API_BASE}{endpoint}"
+    backoff = 1.0
+    _t0 = time.perf_counter()
+    try:
+        for attempt in range(max_retries):
+            try:
+                resp = requests.get(url, params=params, timeout=30)
+                if resp.status_code == 200:
+                    return resp.json()
+                if resp.status_code not in (429, 500, 502, 503, 504) or attempt + 1 == max_retries:
+                    return None
+            except (requests.RequestException, ValueError):
+                if attempt + 1 == max_retries:
+                    return None
+            time.sleep(backoff)
+            backoff *= 2
+        return None
+    finally:
+        _log_timing(f"HAWK-EYE: {endpoint}", _t0)
+
+def _hawkeye_graphql(query: str, variables: Dict[str, Any], max_retries: int = 3) -> Optional[Dict[str, Any]]:
+    """POSTs a query to HAWK-EYE's GraphQL endpoint and returns its `data` object, or None on
+    failure. A GraphQL error list arrives with HTTP 200, so that counts as a failure too."""
+    backoff = 1.0
+    _t0 = time.perf_counter()
+    try:
+        for attempt in range(max_retries):
+            try:
+                resp = requests.post(
+                    HAWKEYE_GRAPHQL_URL, json={"query": query, "variables": variables},
+                    headers=HEADERS, timeout=30
+                )
+                if resp.status_code == 200:
+                    body = resp.json()
+                    return None if body.get('errors') else (body.get('data') or None)
+                if resp.status_code not in (429, 500, 502, 503, 504) or attempt + 1 == max_retries:
+                    return None
+            except (requests.RequestException, ValueError):
+                if attempt + 1 == max_retries:
+                    return None
+            time.sleep(backoff)
+            backoff *= 2
+        return None
+    finally:
+        _log_timing("HAWK-EYE: graphql", _t0)
+
+def hawkeye_exon_skipping_url(gene_symbol: Optional[str]) -> Optional[str]:
+    """Link to a gene's exon-skipping results on the HAWK-EYE website. The API returns no link of
+    its own, so it is built from the site's documented query-string form."""
+    if not gene_symbol:
+        return None
+    return f"{HAWKEYE_FRONTEND_BASE}/exon-skipping/results?genes={quote(str(gene_symbol).strip())}"
+
+def hawkeye_knockdown_url(gene_symbol: Optional[str]) -> Optional[str]:
+    """Link to a gene's knockdown results on the HAWK-EYE website (note: `gene`, singular, where
+    the exon-skipping page takes `genes`)."""
+    if not gene_symbol:
+        return None
+    return f"{HAWKEYE_FRONTEND_BASE}/knockdown/results?gene={quote(str(gene_symbol).strip())}"
+
+def _hawkeye_chrom(chrom: Optional[str]) -> Optional[str]:
+    """Normalises a chromosome name to HAWK-EYE's 'chr'-prefixed form."""
+    if not chrom:
+        return None
+    c = str(chrom).strip()
+    return c if c.lower().startswith('chr') else f"chr{c}"
+
+def _hawkeye_assessment_rows(chrom: str, start: int, end: int) -> Optional[Tuple[Dict[str, Any], ...]]:
+    """Every HAWK-EYE exon-skipping assessment overlapping a genomic interval, or None if HAWK-EYE
+    couldn't be reached. Looking the exon up by its own GRCh38 coordinates rather than by exon
+    number is deliberate: HAWK-EYE numbers exons along the MANE Select transcript, so a number
+    taken from any other transcript would silently address a different exon."""
+    def fetch():
+        rows: List[Dict[str, Any]] = []
+        offset = 0
+        while True:
+            data = _hawkeye_request("/assessments", {
+                "position": f"{chrom}:{start}-{end}", "limit": 100, "offset": offset,
+            })
+            if not data:
+                return _HAWKEYE_UNAVAILABLE
+            rows.extend(data.get('data') or [])
+            pagination = data.get('pagination') or {}
+            if not pagination.get('has_next') or len(rows) >= 500:
+                return tuple(rows)
+            offset += pagination.get('limit') or 100
+    rows = _HAWKEYE_CACHE.get_or_set(('hawkeye_assessments', chrom, start, end), fetch)
+    return None if rows is _HAWKEYE_UNAVAILABLE else rows
+
+def _hawkeye_aso_candidates(gene: str, exon: int) -> Optional[Tuple[Tuple[Dict[str, Any], ...], int]]:
+    """(candidates, total) for one HAWK-EYE gene/exon, or None if HAWK-EYE couldn't be reached.
+    `total` is HAWK-EYE's own count, which stays right even where the page cap below truncates
+    the list. Most exons have a handful of candidates and many have none at all."""
+    def fetch():
+        rows: List[Dict[str, Any]] = []
+        offset = 0
+        total = 0
+        while True:
+            data = _hawkeye_request("/aso-sequences", {
+                "gene": gene, "exon": exon, "limit": 100, "offset": offset,
+            })
+            if not data:
+                return _HAWKEYE_UNAVAILABLE
+            rows.extend(data.get('data') or [])
+            pagination = data.get('pagination') or {}
+            total = pagination.get('total')
+            total = len(rows) if total is None else total
+            if not pagination.get('has_next') or len(rows) >= 500:
+                return (tuple(rows), total)
+            offset += pagination.get('limit') or 100
+    result = _HAWKEYE_CACHE.get_or_set(('hawkeye_asos', str(gene).upper(), exon), fetch)
+    return None if result is _HAWKEYE_UNAVAILABLE else result
+
+# Assessment fields carried through to the client: enough for the on-page summary and for the
+# metadata block of the ASO CSV download, without copying the whole record.
+_HAWKEYE_ASSESSMENT_FIELDS = (
+    'id', 'transcript_id', 'gene', 'chromosome', 'exon', 'exon_count', 'strand',
+    'exon_start', 'exon_end', 'exon_length', 'cds_contribution', 'exon_frame',
+    'skipped_codon', 'ptc_generation', 'first_coding_exon', 'last_coding_exon',
+    'lp_p_missense', 'lp_p_nonsense', 'lp_p_in_frame_deletions', 'uniprot_id', 'aa_pos',
+    'functional_domains', 'repeats', 'other_functional_annotations', 'other_ptms',
+    'interpro_domains', 'assessment', 'explanation',
+)
+
+def get_hawkeye_exon_skipping(
+    gene_symbol: Optional[str], chrom: Optional[str], exon_start: Optional[int],
+    exon_end: Optional[int], total_exon_number: Optional[int] = None
+) -> Dict[str, Any]:
+    """HAWK-EYE's dispensability assessment for one exon, plus its ASO candidates.
+
+    The exon is matched by GRCh38 coordinates and gene symbol (see _hawkeye_assessment_rows). Where
+    an interval overlaps several of a gene's exons - HAWK-EYE clips the stored coordinates of some
+    first/last coding exons, so overlap is not always exact - the row whose exon number matches
+    this transcript's wins, and failing that the one overlapping the exon most.
+
+    Always returns a dict; `unavailable` means HAWK-EYE couldn't be reached and `found` False means
+    it holds no assessment for this exon. Neither is an error: HAWK-EYE covers MANE Select
+    transcripts only, and AVEC's own assessment does not depend on it."""
+    url = hawkeye_exon_skipping_url(gene_symbol)
+    empty: Dict[str, Any] = {
+        "found": False, "unavailable": False, "url": url,
+        "aso_count": 0, "asos": [], "asos_truncated": False, "asos_unavailable": False,
+        "exon_number_matches": True,
+        "retrieved_at": time.strftime('%Y-%m-%dT%H:%M:%S'),
+        "retrieved_at_stamp": time.strftime('%Y%m%d-%H%M%S'),
+    }
+    norm_chrom = _hawkeye_chrom(chrom)
+    if not norm_chrom or exon_start is None or exon_end is None:
+        return empty
+    rows = _hawkeye_assessment_rows(norm_chrom, int(exon_start), int(exon_end))
+    if rows is None:
+        return {**empty, "unavailable": True}
+    wanted_gene = str(gene_symbol or '').strip().upper()
+    candidates = [r for r in rows if not wanted_gene or str(r.get('gene') or '').strip().upper() == wanted_gene]
+    if not candidates:
+        return empty
+
+    def overlap(row: Dict[str, Any]) -> int:
+        try:
+            return min(int(exon_end), int(row['exon_end'])) - max(int(exon_start), int(row['exon_start'])) + 1
+        except (TypeError, ValueError, KeyError):
+            return 0
+    exact = [r for r in candidates if total_exon_number is not None and r.get('exon') == total_exon_number]
+    row = max(exact or candidates, key=overlap)
+
+    result = {k: row.get(k) for k in _HAWKEYE_ASSESSMENT_FIELDS}
+    result.update(empty)
+    result["found"] = True
+    # Flags a HAWK-EYE record found by coordinates whose exon number differs from this
+    # transcript's, so the page can say which exon HAWK-EYE actually assessed.
+    result["exon_number_matches"] = (total_exon_number is None or row.get('exon') == total_exon_number)
+    hk_gene, hk_exon = row.get('gene'), row.get('exon')
+    if hk_gene and hk_exon is not None:
+        asos = _hawkeye_aso_candidates(str(hk_gene), int(hk_exon))
+        if asos is None:
+            result["asos_unavailable"] = True
+        else:
+            aso_rows, total = asos
+            result["asos"] = [
+                {
+                    "aso_sequence": a.get('aso_sequence'),
+                    "idt_format_aso": a.get('idt_format_aso'),
+                    "acute_neurotoxicity_score": a.get('acute_neurotoxicity_score'),
+                }
+                for a in aso_rows
+            ]
+            result["aso_count"] = total
+            result["asos_truncated"] = total > len(aso_rows)
+    return result
+
+def get_hawkeye_knockdown(gene_symbol: Optional[str]) -> Dict[str, Any]:
+    """HAWK-EYE's allele-specific knockdown targets for a gene: how many heterozygous SNPs can be
+    targeted, and how many ASO sequences exist against them. Sourced from the GraphQL endpoint the
+    HAWK-EYE site itself uses, since the documented REST API covers exon skipping only.
+
+    The per-SNP asoCount15mer/asoCount20mer figures are summed rather than counting
+    knockdownAsosByGene rows, which yields the same total for a fraction of the payload."""
+    url = hawkeye_knockdown_url(gene_symbol)
+    empty: Dict[str, Any] = {
+        "found": False, "unavailable": False, "url": url,
+        "snp_count": 0, "aso_count": 0, "aso_count_15mer": 0, "aso_count_20mer": 0,
+    }
+    if not gene_symbol:
+        return empty
+    query = (
+        "query avecKnockdown($gene: String!) {\n"
+        "  knockdownSnpsByGene(gene: $gene) { snpId asoCount15mer asoCount20mer }\n"
+        "}"
+    )
+
+    def fetch():
+        data = _hawkeye_graphql(query, {"gene": str(gene_symbol).strip()})
+        if data is None:
+            return _HAWKEYE_UNAVAILABLE
+        snps = data.get('knockdownSnpsByGene') or []
+
+        def count(row, key):
+            try:
+                return int(row.get(key) or 0)
+            except (TypeError, ValueError):
+                return 0
+        c15 = sum(count(s, 'asoCount15mer') for s in snps)
+        c20 = sum(count(s, 'asoCount20mer') for s in snps)
+        return {
+            "found": bool(snps), "unavailable": False, "url": url,
+            "snp_count": len(snps), "aso_count": c15 + c20,
+            "aso_count_15mer": c15, "aso_count_20mer": c20,
+        }
+    result = _HAWKEYE_CACHE.get_or_set(('hawkeye_knockdown', str(gene_symbol).strip().upper()), fetch)
+    if result is _HAWKEYE_UNAVAILABLE:
+        return {**empty, "unavailable": True}
+    return dict(result)
 
 def _base_transcript_id(transcript_id: Optional[str]) -> str:
     """Strips a trailing '.<version>' suffix (e.g. 'NM_000546.5' -> 'NM_000546') for comparison."""
@@ -2048,7 +2436,7 @@ def assess_wt_upregulation(client: EnsemblClient, gene_id: str, gene_symbol: str
         }
 
 def _with_aso_exists_check(result: Optional[Dict[str, Any]], overrides: Dict[str, bool]) -> Optional[Dict[str, Any]]:
-    """Adds the user-overridable 'ASO already exists' check to a splice-switching result that lacks one."""
+    """Adds the user-overridable 'ASO already exists' check to a splice-correction result that lacks one."""
     if result is not None:
         result.setdefault('checks', {}).setdefault('ASO already exists', {
             "passed": overrides.get('ASO already exists', False),
@@ -2059,7 +2447,7 @@ def _with_aso_exists_check(result: Optional[Dict[str, Any]], overrides: Dict[str
 
 def assess_splice_switching(variant_hgvs: str, vep_data: Dict[str, Any], gene_symbol: str, exonic_pathogenic_user_input: Optional[str] = None, overrides: Optional[Dict[str, bool]] = None, target_consequence: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
     """
-    Assesses a variant for splice-switching potential, adding method and DOI link.
+    Assesses a variant for splice-correction potential, adding method and DOI link.
     If not found in the DB, it returns a prompt for user validation.
     """
     overrides = overrides or {}
@@ -2070,7 +2458,7 @@ def assess_splice_switching(variant_hgvs: str, vep_data: Dict[str, Any], gene_sy
     if aso_exists_final:
         return {
             "classification": "Eligible",
-            "reason": "User confirms an ASO for this variant already exists, therefore it is eligible for splice switching.",
+            "reason": "User confirms an ASO for this variant already exists, therefore it is eligible for splice correction.",
             "checks": {
                 "ASO already exists": {"passed": True, "original_passed": False, "overridden": True}
             }
@@ -2168,8 +2556,10 @@ def _exon_variant_window(exon: Dict[str, Any]) -> Tuple[str, int, int]:
     intronic bases on each side, so its canonical splice-site variants are counted too."""
     return exon['seq_region_name'], max(1, exon['start'] - SPLICE_FLANK_BP), exon['end'] + SPLICE_FLANK_BP
 
-def assess_consecutive_exons(client, transcript, all_exons, target_exon, overrides=None, gene_symbol=None):
-    overrides = overrides or {}
+def assess_consecutive_exons(client, transcript, all_exons, target_exon, pair_overrides=None, gene_symbol=None):
+    # One set of overrides per pair, by the result's "override_key", so that overriding
+    # one pair leaves the other pair's assessment untouched
+    pair_overrides = pair_overrides or {}
     coding_exons = sorted([e for e in all_exons if e['cds_length'] > 0], key=lambda x: x['coding_exon_number'])
     
     target_idx = next((i for i, ex in enumerate(coding_exons) if ex['exon_id'] == target_exon['exon_id']), -1)
@@ -2179,6 +2569,9 @@ def assess_consecutive_exons(client, transcript, all_exons, target_exon, overrid
     def evaluate_pair(exon_a, exon_b):
         gene_id = transcript.get('Parent')
         transcript_id = transcript.get('id')
+        # Includes the transcript because exon numbers differ between the input and alternative transcript
+        override_key = f"{transcript_id}:{exon_a['coding_exon_number']}+{exon_b['coding_exon_number']}"
+        overrides = pair_overrides.get(override_key, {})
         protein_id = transcript.get("Translation", {}).get("id")
         protein_meta = client.get_protein_meta(protein_id) if protein_id else None
         
@@ -2251,19 +2644,24 @@ def assess_consecutive_exons(client, transcript, all_exons, target_exon, overrid
                         "source": d.get('source') or d.get('type'), "id": d.get('id'), "url": d.get('url'),
                         "start": d.get('start'), "end": d.get('end')
                     })
-        domain_count = len(overlapping_domain_names)
-        orig_cond5_no_domain = domain_count == 0
 
         trexome_repeats_a = get_trexome_repeats_for_exon(gene_symbol, exon_a.get('seq_region_name'), exon_a.get('start'), exon_a.get('end'))
         trexome_repeats_b = get_trexome_repeats_for_exon(gene_symbol, exon_b.get('seq_region_name'), exon_b.get('start'), exon_b.get('end'))
+        trexome_unavailable = trexome_repeats_a is None or trexome_repeats_b is None
         seen_trexome_keys = set()
         trexome_repeats = []
-        for r in trexome_repeats_a + trexome_repeats_b:
+        for r in (trexome_repeats_a or []) + (trexome_repeats_b or []):
             key = (r.get('uniprot_id'), r.get('protein_start'), r.get('protein_end'))
             if key in seen_trexome_keys:
                 continue
             seen_trexome_keys.add(key)
             trexome_repeats.append(r)
+        # TReXome tandem repeats count as domains alongside Ensembl's
+        trexome_domain_details = _trexome_domain_details(trexome_repeats)
+        overlapping_domain_details.extend(trexome_domain_details)
+        overlapping_domain_names.extend(d['label'] for d in trexome_domain_details)
+        domain_count = len(overlapping_domain_names)
+        orig_cond5_no_domain = domain_count == 0
 
         # Variants
         def _get_counts_for_exon(exon):
@@ -2296,7 +2694,7 @@ def assess_consecutive_exons(client, transcript, all_exons, target_exon, overrid
         cond7_splice = overrides.get(PAIR_SPLICE_CHECK, orig_cond7_splice)
         cond8_no_inframe_del = overrides.get('No Pathogenic In-Frame Deletions', orig_cond8_no_inframe_del)
         cond10_no_new_codon = overrides.get('No New Codon Formation', orig_cond10_no_new_codon)
-        cond_important_domain = overrides.get('Important Domain', orig_cond_important_domain)
+        cond_important_domain = overrides.get('No Important Domain', orig_cond_important_domain)
 
         classification, reason = "Undetermined", ""
         if not cond3_not_terminal: classification, reason = "Not Eligible", "One of the exons is the first or last coding exon."
@@ -2317,6 +2715,8 @@ def assess_consecutive_exons(client, transcript, all_exons, target_exon, overrid
         if trexome_repeats:
             repeat_types = ', '.join(sorted({r['repeat_type'] for r in trexome_repeats if r.get('repeat_type')}))
             note += f" These exons overlap {len(trexome_repeats)} tandem repeat domain(s) ({repeat_types}) annotated in TReXome DB."
+        if trexome_unavailable:
+            note += " TReXome DB could not be reached, so tandem repeat domains were not included in the domain count."
         note += " Please note that some exceptions for exon skipping assessment apply. Please refer to the methods section for more details."
 
         return {
@@ -2324,10 +2724,10 @@ def assess_consecutive_exons(client, transcript, all_exons, target_exon, overrid
             "frac_cds": f"{((Decimal(str(combined_aa_len)) / Decimal(str(total_protein_len))) * 100):.2f}%" if total_protein_len > 0 else "N/A",
             "pathogenic_variant_counts": counts, "domain_count": domain_count, "domain_names": overlapping_domain_names,
             "domain_details": overlapping_domain_details, "splice_variant_links": splice_variant_links, "pathogenic_variant_links": pathogenic_variant_links,
-            "trexome_repeats": trexome_repeats,
+            "trexome_repeats": trexome_repeats, "trexome_unavailable": trexome_unavailable,
             "coding_exon_number": f"{exon_a['coding_exon_number']}+{exon_b['coding_exon_number']}",
             "total_exon_number": f"{exon_a['total_exon_number']}+{exon_b['total_exon_number']} / {len(all_exons)}",
-            "gene_id": gene_id, "transcript_id": transcript_id,
+            "gene_id": gene_id, "transcript_id": transcript_id, "override_key": override_key,
             "clinvar_url": f"https://www.ncbi.nlm.nih.gov/clinvar/?term=GRCh38%3A{exon_a['seq_region_name']}%3A{min(exon_a['start'], exon_b['start']) - SPLICE_FLANK_BP}-{max(exon_a['end'], exon_b['end']) + SPLICE_FLANK_BP}",
             "checks": {
                 "Is In-Frame": {"passed": True, "original_passed": True, "overridden": 'Is In-Frame' in overrides},
@@ -2335,7 +2735,7 @@ def assess_consecutive_exons(client, transcript, all_exons, target_exon, overrid
                 "Not First/Last Exon": {"passed": cond3_not_terminal, "original_passed": orig_cond3_not_terminal, "overridden": 'Not First/Last Exon' in overrides},
                 PAIR_SPLICE_CHECK: {"passed": cond7_splice, "original_passed": orig_cond7_splice, "overridden": PAIR_SPLICE_CHECK in overrides},
                 "No Pathogenic In-Frame Deletions": {"passed": cond8_no_inframe_del, "original_passed": orig_cond8_no_inframe_del, "overridden": 'No Pathogenic In-Frame Deletions' in overrides},
-                "Important Domain": {"passed": cond_important_domain, "original_passed": orig_cond_important_domain, "overridden": 'Important Domain' in overrides},
+                "No Important Domain": {"passed": cond_important_domain, "original_passed": orig_cond_important_domain, "overridden": 'No Important Domain' in overrides},
                 "No Domain Overlap": {"passed": cond5_no_domain, "original_passed": orig_cond5_no_domain, "overridden": 'No Domain Overlap' in overrides},
                 "No New Codon Formation": {"passed": cond10_no_new_codon, "original_passed": orig_cond10_no_new_codon, "overridden": 'No New Codon Formation' in overrides},
                 "exon does not contain a mutational hotspot (user input required)": {"passed": cond6_missense, "original_passed": orig_cond6_missense, "overridden": 'exon does not contain a mutational hotspot (user input required)' in overrides},
@@ -2361,17 +2761,31 @@ def assess_consecutive_exons(client, transcript, all_exons, target_exon, overrid
     pair_futures = [_PAIR_EXECUTOR.submit(evaluate_pair, ex_a, ex_b) for ex_a, ex_b in candidates]
     return [f.result() for f in pair_futures]
 
-def assess_single_exon(client, transcript, all_exons, target_exon, vep_entry: Dict[str, Any], overrides: Optional[Dict[str, bool]] = None, aso_exists: bool = False, moa_user_input: Optional[str] = None, gene_symbol: Optional[str] = None):
+def assess_single_exon(client, transcript, all_exons, target_exon, vep_entry: Dict[str, Any], overrides: Optional[Dict[str, bool]] = None, aso_exists: bool = False, moa_user_input: Optional[str] = None, gene_symbol: Optional[str] = None, pair_overrides: Optional[Dict[str, Dict[str, bool]]] = None):
     overrides = overrides or {}
     # --- Step 1: Data Gathering and Calculations ---
     # Set precision for Decimal calculations
     getcontext().prec = 10
 
+    # HAWK-EYE's exon record and its ASO candidates don't depend on anything computed below, and
+    # its API takes a few seconds, so the lookup runs alongside the Ensembl/ClinVar work and is
+    # collected just before the result is assembled. An early return below simply abandons it
+    # (the thread still finishes and warms the cache).
+    hawkeye_future = _HAWKEYE_EXECUTOR.submit(
+        get_hawkeye_exon_skipping,
+        gene_symbol,
+        target_exon.get('seq_region_name'),
+        target_exon.get('start'),
+        target_exon.get('end'),
+        target_exon.get('total_exon_number'),
+    )
+
     gene_id = transcript.get('Parent') 
     transcript_id = transcript.get('id')
     protein_id = transcript.get("Translation", {}).get("id")
+    _progress('cds', f"Fetching the protein and coding sequence of {transcript_id} (Ensembl)")
     protein_meta = client.get_protein_meta(protein_id) if protein_id else None
-    
+
     cds_seq = client.get_cds_sequence(transcript_id)
     
     coding_exons = [e for e in all_exons if e['cds_length'] > 0]
@@ -2393,6 +2807,7 @@ def assess_single_exon(client, transcript, all_exons, target_exon, vep_entry: Di
 
     # Variant window: the exon plus its canonical splice sites (see SPLICE_FLANK_BP)
     chrom, start, end = _exon_variant_window(target_exon)
+    _progress('clinvar', f"Counting pathogenic ClinVar variants in exon {target_exon['total_exon_number']} (Ensembl, NCBI ClinVar)")
     variants_in_region = client.overlap_region_variation(chrom, start, end)
     clinvar_region = fetch_clinvar_region_cached(chrom, start, end)
 
@@ -2441,6 +2856,7 @@ def assess_single_exon(client, transcript, all_exons, target_exon, vep_entry: Di
 
     original_conds['cond3_not_terminal'] = (coding_exon_number is not None and coding_exon_number not in (1, total_coding_exons))
     original_conds['cond4_small'] = (Decimal(str(exon_aa_len)) / Decimal(str(total_protein_len))) < Decimal('0.1') if total_protein_len > 0 else False
+    _progress('domains', "Checking which protein domains overlap the exon (Ensembl)")
     domains = client.get_domains(protein_id) if protein_id else []
     overlapping_domain_names, overlapping_domain_details = [], []
     if domains:
@@ -2460,6 +2876,15 @@ def assess_single_exon(client, transcript, all_exons, target_exon, vep_entry: Di
                     "end": d.get('end')
                 })
 
+    _progress('trexome', "Looking up tandem repeats in the exon (TReXome DB)")
+    trexome_repeats = get_trexome_repeats_for_exon(gene_symbol, target_exon.get('seq_region_name'), target_exon.get('start'), target_exon.get('end'))
+    trexome_unavailable = trexome_repeats is None
+    trexome_repeats = trexome_repeats or []
+    # TReXome tandem repeats count as domains alongside Ensembl's
+    trexome_domain_details = _trexome_domain_details(trexome_repeats)
+    overlapping_domain_details.extend(trexome_domain_details)
+    overlapping_domain_names.extend(d['label'] for d in trexome_domain_details)
+
     domain_count = len(overlapping_domain_names)
     original_conds['cond5_no_domain'] = domain_count == 0
     original_conds['cond6_missense'] = True  # always True by default; only False when user overrides
@@ -2468,8 +2893,6 @@ def assess_single_exon(client, transcript, all_exons, target_exon, vep_entry: Di
     original_conds['cond9_benign_splice'] = counts['benign_splice'] > 0
     original_conds['aso_exists'] = aso_exists
     original_conds['cond_important_domain'] = True  # always True by default; only False when user overrides
-
-    trexome_repeats = get_trexome_repeats_for_exon(gene_symbol, target_exon.get('seq_region_name'), target_exon.get('start'), target_exon.get('end'))
 
     # --- Step 2.5: Apply Overrides to get FINAL states ---
     # Start with original values, then overwrite if an override exists
@@ -2545,6 +2968,8 @@ def assess_single_exon(client, transcript, all_exons, target_exon, vep_entry: Di
     if trexome_repeats:
         repeat_types = ', '.join(sorted({r['repeat_type'] for r in trexome_repeats if r.get('repeat_type')}))
         note_parts.append(f"Exon overlaps {len(trexome_repeats)} tandem repeat domain(s) ({repeat_types}) annotated in TReXome DB.")
+    if trexome_unavailable:
+        note_parts.append("TReXome DB could not be reached, so tandem repeat domains were not included in the domain count.")
     note_parts.append("Please note that some exceptions for exon skipping apply. Please refer to the methods section for more details.")
     if moa_user_input not in ("GoF", "LoF", "DN"):
         note_parts.append("\n Exon skipping assessment without knowledge of pathomechanism would technically be classified as 'unable to assess'. We strongly recommend to identify the pathomechanism of the variant before continuing")
@@ -2607,7 +3032,11 @@ def assess_single_exon(client, transcript, all_exons, target_exon, vep_entry: Di
         traceback.print_exc()
         visualization_data = None
 
+    _progress('hawkeye', f"Fetching the HAWK-EYE assessment and ASO candidates for exon {target_exon['total_exon_number']}")
+    hawkeye = hawkeye_future.result()
+
     # --- FINAL RETURN STATEMENT ---
+
     single_res = {
         "classification": classification,
         "reason": reason,
@@ -2623,6 +3052,7 @@ def assess_single_exon(client, transcript, all_exons, target_exon, vep_entry: Di
         "domain_names": overlapping_domain_names,
         "domain_details": overlapping_domain_details,
         "trexome_repeats": trexome_repeats,
+        "trexome_unavailable": trexome_unavailable,
         "splice_variant_links": splice_variant_links,
         "pathogenic_variant_links": pathogenic_variant_links,
         "coding_exon_number": coding_exon_number,
@@ -2645,18 +3075,101 @@ def assess_single_exon(client, transcript, all_exons, target_exon, vep_entry: Di
             "Exon encodes for <10% of Protein": {"passed": cond4_small, "original_passed": original_conds['cond4_small'], "overridden": 'Exon encodes for <10% of Protein' in overrides}
         },
         "min_review_stars_applied": MIN_REVIEW_STARS if star_filter_active else None,
+        "hawkeye": hawkeye,
         "visualization": visualization_data
+
     }
 
     results_list = [single_res]
 
     # Check consecutive exons if originally out of frame, regardless of override status of 'Is In-Frame'
     if not original_conds['cond1_inframe']:
-        consecutive_results = assess_consecutive_exons(client, transcript, all_exons, target_exon, overrides, gene_symbol=gene_symbol)
+        _progress('exon_pairs', "Exon is out of frame: testing it together with each neighbouring exon")
+        consecutive_results = assess_consecutive_exons(client, transcript, all_exons, target_exon, pair_overrides, gene_symbol=gene_symbol)
         if consecutive_results:
             results_list.extend(consecutive_results)
 
     return results_list
+
+MECHANISMS = ("GoF", "LoF", "DN")
+
+def _gene_level_assessments(
+    moa: str,
+    moi: set,
+    gene_symbol: str,
+    gene_id: Optional[str],
+    gene_characteristics: Dict[str, Any],
+    client: EnsemblClient,
+    knockdown_overrides: Dict,
+    wt_upregulation_overrides: Dict
+) -> Tuple[Dict[str, Any], List[str], bool]:
+    """
+    Gene-level strategies (knockdown, WT upregulation, N1C gene-level knockdown) for one mechanism
+    of action and the gene's mode of inheritance. Returns (assessments, summary notes, done); done
+    means an established N1C gene-level knockdown ASO settles the query, so the variant-level
+    strategies are not assessed.
+    """
+    assessments: Dict[str, Any] = {}
+    summary_notes: List[str] = []
+    if moa in ("GoF", "DN"):
+        is_ad = any("autosomal dominant" in str(m).lower() or "x-linked dominant" in str(m).lower() for m in moi)
+        if is_ad:
+            n1c_gene_kd = n1c_gene_knockdown_entry(gene_symbol, moa)
+            if n1c_gene_kd:
+                assessments["N1C_Gene_Knockdown"] = n1c_gene_kd
+                if not n1c_gene_kd.get("under_development"):
+                    return assessments, summary_notes, True
+
+            # Only run regular knockdown if there is no N1C gene-level knockdown entry,
+            # or the matching entry is still "Under Development"
+            if not n1c_gene_kd or n1c_gene_kd.get("under_development"):
+                _progress('gene_strategies', "Assessing knockdown against ClinGen dosage sensitivity")
+                knockdown_assessment = assess_knockdown(gene_characteristics, overrides=knockdown_overrides)
+                if moa == "DN":
+                    knockdown_assessment["note"] = "Dominant Negative mechanism; allele-specific knockdown is necessary."
+
+                if moa == "GoF":
+                    knockdown_assessment["note"] = "Dominant mode of inheritance; allele-specific knockdown is recommended."
+                assessments["Knockdown"] = knockdown_assessment
+
+    if moa == "GoF":
+        # Skipped when the dominant branch above already produced the knockdown assessment
+        # (e.g. X-linked dominant matches both), so its note isn't overwritten
+        is_xlinked_or_ar = any("x-linked" in str(m).lower() or "autosomal recessive" in str(m).lower() for m in moi)
+        if is_xlinked_or_ar and "Knockdown" not in assessments:
+            n1c_gene_kd = n1c_gene_knockdown_entry(gene_symbol, moa)
+            if n1c_gene_kd:
+                assessments["N1C_Gene_Knockdown"] = n1c_gene_kd
+                if not n1c_gene_kd.get("under_development"):
+                    return assessments, summary_notes, True
+
+            if not n1c_gene_kd or n1c_gene_kd.get("under_development"):
+                _progress('gene_strategies', "Assessing knockdown against ClinGen dosage sensitivity")
+                assessments["Knockdown"] = assess_knockdown(gene_characteristics, overrides=knockdown_overrides)
+
+    elif moa == "LoF":
+        # Show WT Upregulation only when LoF and Autosomal Dominant MOI (case-insensitive match)
+        is_lof_ad = any("autosomal dominant inheritance" in str(m).lower() for m in moi)
+        is_x_linked_dominant = any("x-linked dominant inheritance" in str(m).lower() for m in moi)
+        if is_lof_ad or is_x_linked_dominant:
+            _progress('gene_strategies', f"Looking for uORFs, antisense transcripts and poison exons in {gene_symbol} (WT upregulation)")
+        if is_x_linked_dominant:
+            wt_upregulation_assessment = assess_wt_upregulation(client, gene_id, gene_symbol, overrides=wt_upregulation_overrides)
+            wt_upregulation_assessment["note"] = "WT-upregulation only possible if more than one X-Chromosome is available"
+            assessments["WT_Upregulation"] = wt_upregulation_assessment
+            summary_notes.append("WT-upregulation only possible if more than one X-Chromosome is available")
+        elif is_lof_ad:
+            assessments["WT_Upregulation"] = assess_wt_upregulation(client, gene_id, gene_symbol, overrides=wt_upregulation_overrides)
+
+    # HAWK-EYE's allele-specific knockdown targets for this gene, shown next to AVEC's own
+    # knockdown verdict. Prefetched in _assess_for_transcript, so this normally reads the cache.
+    # The early returns above settle the query with an established N1C ASO and carry no
+    # "Knockdown" entry, so they need none of this.
+    if "Knockdown" in assessments:
+        assessments["Knockdown"]["hawkeye_knockdown"] = get_hawkeye_knockdown(gene_symbol)
+
+    return assessments, summary_notes, False
+
 
 def _assess_for_transcript(
     target_consequence: Dict[str, Any],
@@ -2666,14 +3179,18 @@ def _assess_for_transcript(
     moa_user_input: Optional[str],
     exonic_pathogenic_user_input: Optional[str],
     exon_skipping_overrides: Dict,
+    exon_pair_overrides: Dict,
     knockdown_overrides: Dict,
     wt_upregulation_overrides: Dict,
     gene_characteristics_overrides: Optional[Dict],
     splice_switching_overrides: Dict,
-    client: EnsemblClient
+    client: EnsemblClient,
+    all_mechanisms: bool = False
 ) -> Dict[str, Any]:
     """
     Runs the full ASO-strategy assessment for a single, already-resolved transcript consequence.
+    With all_mechanisms and no mechanism of action given, the gene-level strategies are listed for
+    each mechanism under "mechanism_assessments".
     """
     gene_symbol = target_consequence['gene_symbol']
     definitive_transcript_id = target_consequence['transcript_id']
@@ -2681,21 +3198,25 @@ def _assess_for_transcript(
 
     # Only depends on target_consequence, already known - decided early so the exon-
     # skipping transcript lookup below can be kicked off now and overlap with gene-
-    # characteristics/knockdown/WT-upregulation/splice-switching work instead of only
+    # characteristics/knockdown/WT-upregulation/splice-correction work instead of only
     # starting once execution reaches the exon-skipping block.
     consequence_terms = set(target_consequence.get('consequence_terms', []))
     exonic_terms = {'missense_variant', 'stop_gained', 'frameshift_variant', 'synonymous_variant', 'inframe_deletion', 'inframe_insertion','splice_donor_variant', 'splice_acceptor_variant'}
     is_exonic = any(term in consequence_terms for term in exonic_terms)
     transcript_future = _IO_EXECUTOR.submit(client.lookup_id_expand, definitive_transcript_id) if is_exonic else None
 
-    # TReXome only annotates the summary and exon notes, but its host can take tens of seconds
+    # TReXome feeds the summary and the exon domain counts, but its host can take tens of seconds
     # to wake up - start its lookups now so they overlap with everything below. The per-exon
     # prefetch warms the cache that assess_single_exon/assess_consecutive_exons read.
     trexome_summary_future = _TREXOME_EXECUTOR.submit(get_trexome_gene_repeat_summary, gene_symbol)
+    # Same reasoning for HAWK-EYE's gene-level knockdown figures: its GraphQL endpoint can take
+    # tens of seconds cold, so warm the cache now rather than block _gene_level_assessments.
+    _HAWKEYE_EXECUTOR.submit(get_hawkeye_knockdown, gene_symbol)
     if is_exonic:
         _TREXOME_EXECUTOR.submit(_trexome_repeats_for_gene, gene_symbol)
 
     # --- Initialize Result & Gene Characteristics ---
+    _progress('gene', f"Reading inheritance and dosage sensitivity of {gene_symbol} (ClinGen, rCNV)")
     gene_characteristics = get_gene_characteristics(gene_symbol)
     if gene_characteristics_overrides:
         gene_characteristics.update(gene_characteristics_overrides)
@@ -2720,6 +3241,7 @@ def _assess_for_transcript(
         else:
             protein_effect = "Unable to calculate"
 
+    _progress('literature', "Looking up publications on this variant (LitVar2, Varaico)")
     final_result = {
         "summary": {
             "gene": gene_symbol,
@@ -2735,6 +3257,8 @@ def _assess_for_transcript(
 
     def finish() -> Dict[str, Any]:
         """Collects the TReXome gene summary started above; used on every return path."""
+        if not trexome_summary_future.done():
+            _progress('trexome_gene', f"Waiting for TReXome DB (tandem repeats in {gene_symbol})")
         try:
             final_result["summary"]["trexome_repeats"] = trexome_summary_future.result()
         except Exception:
@@ -2746,6 +3270,7 @@ def _assess_for_transcript(
     registry_hgvs = hgvs_query if re.search(r'c\.', hgvs_query, re.IGNORECASE) else (target_consequence.get('hgvsc') or '')
 
     # --- N1C Assessed Variants (curated) Check (shown first, standard assessment still runs) ---
+    _progress('n1c', f"Searching the N1C registry for ASO projects and assessed variants in {gene_symbol}")
     assessed_match = check_n1c_assessed_variants(gene_symbol, registry_hgvs)
     if assessed_match:
         final_result["assessments"]["N1C_Assessed_Variants"] = assessed_match
@@ -2775,61 +3300,28 @@ def _assess_for_transcript(
     resolved_moa = moa_user_input if moa_user_input in ("GoF", "LoF", "DN") else None
     # Expose resolved_moa for frontend rendering
     final_result["summary"]["resolved_moa"] = resolved_moa
+    gene_level_args = (moi, gene_symbol, gene_id, gene_characteristics, client, knockdown_overrides, wt_upregulation_overrides)
     if resolved_moa:
-        if resolved_moa in("GoF", "DN"):
-            is_ad = any("autosomal dominant" in str(m).lower() or "x-linked dominant" in str(m).lower() for m in moi)
-            if is_ad:
-                n1c_gene_kd = n1c_gene_knockdown_entry(gene_symbol, resolved_moa)
-                if n1c_gene_kd:
-                    final_result["assessments"]["N1C_Gene_Knockdown"] = n1c_gene_kd
-                    if not n1c_gene_kd.get("under_development"):
-                        return finish()
-
-                # Only run regular knockdown if there is no N1C gene-level knockdown entry,
-                # or the matching entry is still "Under Development"
-                if not n1c_gene_kd or n1c_gene_kd.get("under_development"):
-                    knockdown_assessment = assess_knockdown(gene_characteristics, overrides=knockdown_overrides)
-                    if resolved_moa == "DN":
-                        knockdown_assessment["note"] = "Dominant Negative mechanism; allele-specific knockdown is necessary."
-
-                    if resolved_moa == "GoF":
-                        knockdown_assessment["note"] = "Dominant mode of inheritance; allele-specific knockdown is recommended."
-                    final_result["assessments"]["Knockdown"] = knockdown_assessment
-
-        if resolved_moa == "GoF":
-            # Skipped when the dominant branch above already produced the knockdown assessment
-            # (e.g. X-linked dominant matches both), so its note isn't overwritten
-            is_xlinked_or_ar = any("x-linked" in str(m).lower() or "autosomal recessive" in str(m).lower() for m in moi)
-            if is_xlinked_or_ar and "Knockdown" not in final_result["assessments"]:
-                n1c_gene_kd = n1c_gene_knockdown_entry(gene_symbol, resolved_moa)
-                if n1c_gene_kd:
-                    final_result["assessments"]["N1C_Gene_Knockdown"] = n1c_gene_kd
-                    if not n1c_gene_kd.get("under_development"):
-                        return finish()
-
-                if not n1c_gene_kd or n1c_gene_kd.get("under_development"):
-                    knockdown_assessment = assess_knockdown(gene_characteristics, overrides=knockdown_overrides)
-                    final_result["assessments"]["Knockdown"] = knockdown_assessment
-
-        elif resolved_moa == "LoF":
-            # Show WT Upregulation only when LoF and Autosomal Dominant MOI (case-insensitive match)
-            is_lof_ad = any("autosomal dominant inheritance" in str(m).lower() for m in moi)
-            if is_lof_ad:
-                final_result["assessments"]["WT_Upregulation"] = assess_wt_upregulation(client, gene_id, gene_symbol, overrides=wt_upregulation_overrides)
-            is_x_linked_dominant = any("x-linked dominant inheritance" in str(m).lower() for m in moi)
-            if is_x_linked_dominant:
-                wt_upregulation_assessment = assess_wt_upregulation(client, gene_id, gene_symbol, overrides=wt_upregulation_overrides)
-                wt_upregulation_assessment["note"] = "WT-upregulation only possible if more than one X-Chromosome is available"
-                final_result["assessments"]["WT_Upregulation"] = wt_upregulation_assessment
-                _add_summary_note(final_result, "WT-upregulation only possible if more than one X-Chromosome is available")
+        gene_level, summary_notes, done = _gene_level_assessments(resolved_moa, *gene_level_args)
+        final_result["assessments"].update(gene_level)
+        for note in summary_notes:
+            _add_summary_note(final_result, note)
+        if done:
+            return finish()
+    elif all_mechanisms:
+        # Without a selected mechanism (the API takes none), list the gene-level strategies for each
+        final_result["mechanism_assessments"] = {
+            moa: _gene_level_assessments(moa, *gene_level_args)[0] for moa in MECHANISMS
+        }
 
     # --- Variant-Specific Strategies (Splice & Exon Skipping) ---
     # (variant type / is_exonic already resolved above, so transcript_future could be
     # started as early as possible)
 
-    # Run Splice Switching Assessment
+    # Run Splice Correction Assessment
     variant_identifier_from_vep = vep_entry.get('input')
     if variant_identifier_from_vep:
+        _progress('splice', "Checking SpliceVarDB and SSCVDB for experimentally validated splicing effects")
         splice_assessment = None
         if splice_user_input == 'yes':
             details = {"Confirmation Method": "User-provided validation (qPCR/RNA-seq/cDNA)"}
@@ -2845,6 +3337,7 @@ def _assess_for_transcript(
     # Run Exon Skipping Assessment *if* variant is exonic/splice
     if is_exonic and transcript_future is not None:
         exon_skip_assessment_added = False
+        _progress('exons', f"Loading the exon structure of {definitive_transcript_id} (Ensembl)")
         transcript_data = transcript_future.result()
         if transcript_data:
             all_exons = extract_exons_from_transcript(transcript_data)
@@ -2854,6 +3347,7 @@ def _assess_for_transcript(
             if target_exon:
                 # N1C registry exon-skipping support: if an N1C exon-skipping ASO project's variant
                 # lies in this exon, the exon is marked skippable
+                _progress('n1c_exons', f"Mapping N1C exon-skipping projects in {gene_symbol} onto its exons")
                 try:
                     n1c_exon_map, n1c_exon_ud_map = n1c_exon_skipping_variant_exon_map(gene_symbol, all_exons, client)
                 except Exception:
@@ -2866,7 +3360,7 @@ def _assess_for_transcript(
                 # don't let them short-circuit the regular exon-skipping assessment.
                 n1c_exon_under_development = n1c_exon_match and n1c_exon_ud_map.get(exon_num, False)
 
-                exon_skip_results = assess_single_exon(client, transcript_data, all_exons, target_exon, vep_entry, overrides=exon_skipping_overrides, aso_exists=(n1c_exon_match and not n1c_exon_under_development), moa_user_input=moa_user_input, gene_symbol=gene_symbol)
+                exon_skip_results = assess_single_exon(client, transcript_data, all_exons, target_exon, vep_entry, overrides=exon_skipping_overrides, aso_exists=(n1c_exon_match and not n1c_exon_under_development), moa_user_input=moa_user_input, gene_symbol=gene_symbol, pair_overrides=exon_pair_overrides)
 
                 # Only the single-exon result carries visualization data; lift it to the top level
                 visualization = exon_skip_results[0].pop("visualization", None)
@@ -2908,6 +3402,197 @@ def _assess_for_transcript(
         }
 
     return finish()
+
+
+# ===== Provenance: AVEC's version and the release of every data source behind a result =====
+# Each lookup is cached for a day in _ENSEMBL_LOOKUP_CACHE, which never memoizes a failure's None,
+# so a source that can't be reached is retried by a later assessment. None of them may fail one.
+
+def _ensembl_rest_release() -> Optional[int]:
+    """The Ensembl release the REST API serves (VEP, lookups, overlaps), e.g. 116."""
+    def fetch():
+        try:
+            data = EnsemblClient()._get("/info/data", max_retries=2, label="Ensembl: release")
+        except requests.RequestException:
+            return None
+        releases = data.get('releases') if isinstance(data, dict) else None
+        try:
+            return max(int(r) for r in releases) if releases else None
+        except (TypeError, ValueError):
+            return None
+    return _ENSEMBL_LOOKUP_CACHE.get_or_set(('ensembl_rest_release',), fetch)
+
+def _ensembl_platform_release() -> Optional[Dict[str, Any]]:
+    """{release_number, release_date} of the GRCh38 genome on Ensembl's new platform (GraphQL +
+    refget, which serve AVEC's sequences). A query of its own, rather than a wider
+    _grch38_genome_id query, so a change to these fields can't break the sequence lookups."""
+    def fetch():
+        data = _graphql_query(
+            'query($acc: String) { genomes(by_keyword: { assembly_accession_id: $acc }) { release_number release_date } }',
+            {'acc': GRCH38_ASSEMBLY_ACCESSION},
+            label="Ensembl GraphQL: release"
+        )
+        genomes = [g for g in ((data or {}).get('genomes') or []) if isinstance(g, dict) and g.get('release_number') is not None]
+        if not genomes:
+            return None
+        latest = max(genomes, key=lambda g: g['release_number'])
+        return {"release_number": latest['release_number'], "release_date": latest.get('release_date')}
+    return _ENSEMBL_LOOKUP_CACHE.get_or_set(('ensembl_platform_release',), fetch)
+
+def _ncbi_db_info(db: str) -> Optional[Dict[str, Any]]:
+    """{dbbuild, lastupdate} of an NCBI Entrez database (clinvar, pubmed), from einfo."""
+    def fetch():
+        resp = _ncbi_request("einfo.fcgi", {"db": db})
+        info = ((resp or {}).get("einforesult") or {}).get("dbinfo")
+        if isinstance(info, list):
+            info = info[0] if info else None
+        if not isinstance(info, dict) or not (info.get("dbbuild") or info.get("lastupdate")):
+            return None
+        return {"dbbuild": info.get("dbbuild"), "lastupdate": info.get("lastupdate")}
+    return _ENSEMBL_LOOKUP_CACHE.get_or_set(('ncbi_db_info', db), fetch)
+
+# Run alongside an assessment (see process_single_variant); keys are those _build_provenance reads
+_RELEASE_LOOKUPS = {
+    'ensembl_rest': _ensembl_rest_release,
+    'ensembl_platform': _ensembl_platform_release,
+    'clinvar': lambda: _ncbi_db_info('clinvar'),
+    'pubmed': lambda: _ncbi_db_info('pubmed'),
+}
+# How long a finished assessment waits for release lookups still running; past it they read "unknown"
+RELEASE_LOOKUP_WAIT_SECONDS = 15
+
+def _start_release_lookups() -> Dict[str, Any]:
+    """Starts every release lookup on _IO_EXECUTOR (they submit nothing further) and returns the futures."""
+    return {key: _IO_EXECUTOR.submit(lookup) for key, lookup in _RELEASE_LOOKUPS.items()}
+
+def _collect_release_lookups(futures: Dict[str, Any]) -> Dict[str, Any]:
+    """Each lookup's answer, or None where it failed or is still running after the shared wait."""
+    deadline = time.monotonic() + RELEASE_LOOKUP_WAIT_SECONDS
+    releases = {}
+    for key, future in futures.items():
+        try:
+            releases[key] = future.result(timeout=max(0.0, deadline - time.monotonic()))
+        except Exception:
+            releases[key] = None
+    return releases
+
+def _exon_skipping_results(result: Dict[str, Any]) -> List[Dict[str, Any]]:
+    es = (result.get("assessments") or {}).get("Exon_Skipping")
+    items = es if isinstance(es, list) else [es]
+    return [r for r in items if isinstance(r, dict)]
+
+def _knockdown_results(result: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """The Knockdown assessment of the selected mechanism and, for the API, of each mechanism."""
+    blocks = [(result.get("assessments") or {}).get("Knockdown")]
+    blocks += [(per_moa or {}).get("Knockdown") for per_moa in (result.get("mechanism_assessments") or {}).values()]
+    return [b for b in blocks if isinstance(b, dict)]
+
+def _lookup_status(blocks: List[Dict[str, Any]]) -> str:
+    """'not queried' without any HAWK-EYE block, 'unavailable' when every one failed, else 'used'."""
+    if not blocks:
+        return "not queried"
+    return "unavailable" if all(b.get("unavailable") for b in blocks) else "used"
+
+def _build_provenance(results: List[Dict[str, Any]], assessed_at: str, releases: Dict[str, Any]) -> Dict[str, Any]:
+    """The software version and one row per data source for a finished assessment. `results` are
+    the primary result and, when present, the alternate transcript's; a source counts as used when
+    either one used it. Status: 'used', 'unavailable' (queried but not reached, or not loaded),
+    'not queried' (not needed for this variant) or 'link' (only linked to, no data fetched)."""
+    exon_results = [r for res in results for r in _exon_skipping_results(res)]
+    knockdown_results = [k for res in results for k in _knockdown_results(res)]
+    summaries = [res.get("summary") or {} for res in results]
+
+    ensembl_release = releases.get('ensembl_rest')
+    platform = releases.get('ensembl_platform') or {}
+    platform_version = None
+    if platform.get('release_number') is not None:
+        platform_version = f"Release {platform['release_number']}" + (f" ({platform['release_date']})" if platform.get('release_date') else "")
+
+    def ncbi_version(info: Optional[Dict[str, Any]]) -> Optional[str]:
+        if not info:
+            return None
+        return ", ".join(part for part in (info.get("dbbuild"), f"updated {info['lastupdate']}" if info.get("lastupdate") else None) if part)
+
+    star_flags = [r["min_review_stars_applied"] for r in exon_results if "min_review_stars_applied" in r]
+    if not star_flags:
+        clinvar_status = "not queried"
+    else:
+        clinvar_status = "used" if any(flag is not None for flag in star_flags) else "unavailable"
+
+    hawkeye_exon = [r["hawkeye"] for r in exon_results if isinstance(r.get("hawkeye"), dict)]
+    hawkeye_note = None
+    if hawkeye_exon and not any(h.get("found") or h.get("unavailable") for h in hawkeye_exon):
+        hawkeye_note = "HAWK-EYE holds no assessment for this exon"
+    hawkeye_kd = [k["hawkeye_knockdown"] for k in knockdown_results if isinstance(k.get("hawkeye_knockdown"), dict)]
+    trexome_status = "unavailable" if any(r.get("trexome_unavailable") for r in exon_results) else "used"
+    has_rsid = any(s.get("litvar") for s in summaries)
+
+    # publishes_version tells a source without a release number apart from a failed release lookup
+    def live(name, provides, version=None, status="used", url=None, note=None, publishes_version=False, **extra):
+        return {"name": name, "provides": provides, "kind": "live", "version": version, "publishes_version": publishes_version,
+                "accessed_at": assessed_at if status in ("used", "unavailable", "as needed") else None,
+                "status": status, "url": url, "note": note, **extra}
+
+    sources = [
+        live("Ensembl REST API and VEP",
+             "Variant consequences, transcripts and exons, protein domains, overlapping genes, "
+             "variants in the exon with their ClinVar significance",
+             f"Ensembl {ensembl_release}" if ensembl_release else None, url="https://rest.ensembl.org", publishes_version=True),
+        live("Ensembl GraphQL and refget",
+             "Genomic and coding sequences (stop codons on skipping, indel alignment)",
+             platform_version, status="used" if exon_results else "as needed", url="https://www.ensembl.org", publishes_version=True),
+        live("NCBI ClinVar (E-utilities)", "Review status (stars) of the exon's ClinVar variants",
+             ncbi_version(releases.get('clinvar')), status=clinvar_status, url="https://www.ncbi.nlm.nih.gov/clinvar/",
+             note="Review-star filter could not be applied" if clinvar_status == "unavailable" else None, publishes_version=True),
+        live("PubMed (E-utilities)", "ASO and knockdown literature lists, fetched by the browser",
+             ncbi_version(releases.get('pubmed')), url="https://pubmed.ncbi.nlm.nih.gov/",
+             note="Queried by the browser when the results are shown", publishes_version=True),
+        live("LitVar2", "Publication count for the variant's dbSNP rsID",
+             status="used" if has_rsid else "not queried", url="https://www.ncbi.nlm.nih.gov/research/litvar2/",
+             note=None if has_rsid else "The variant has no dbSNP rsID"),
+        live("Varaico", "Link to literature on this variant", status="link", url="https://varaico.com"),
+        live("TReXome DB", "Tandem repeats in the gene and exon", status=trexome_status, url=TREXOME_FRONTEND_BASE),
+        live("HAWK-EYE exon skipping (REST API)", "Exon dispensability assessment and ASO candidates",
+             status=_lookup_status(hawkeye_exon), url=HAWKEYE_FRONTEND_BASE, note=hawkeye_note),
+        live("HAWK-EYE knockdown (GraphQL)", "Targetable heterozygous SNPs and ASO counts for allele-specific knockdown",
+             status=_lookup_status(hawkeye_kd), url=HAWKEYE_FRONTEND_BASE),
+    ]
+    for key, name, provides, df in (
+        ('projects', "N1C gene registry: projects", "Existing and developing ASO projects", n1c_variants_df),
+        ('assessed', "N1C gene registry: assessed variants", "Curated variant assessments", n1c_assessed_df),
+    ):
+        loaded = _n1c_loaded.get(key) or {}
+        sources.append({
+            "name": name, "provides": provides, "kind": "live", "version": None, "publishes_version": False,
+            "loaded_at": loaded.get("loaded_at"), "rows": loaded.get("rows"),
+            "status": "used" if df is not None else "unavailable", "url": "https://generegistry.n1collaborative.org",
+            "note": f"Snapshot fetched by AVEC, refreshed every {N1C_REFRESH_SECONDS // 3600}\u00a0h",
+        })
+    for key, meta in BUNDLED_DATA_SOURCES.items():
+        loaded = _bundled_provenance.get(key) or {}
+        sources.append({
+            "name": meta["name"], "provides": meta["provides"], "kind": "bundled", "version": meta["version"], "publishes_version": True,
+            "file": meta["file"], "sha256": loaded.get("sha256"), "rows": loaded.get("rows"),
+            "status": "used" if loaded.get("loaded") else "unavailable", "url": meta["url"], "note": None,
+        })
+
+    return {
+        "software": {
+            "name": "AVEC",
+            "version": AVEC_VERSION,
+            "release_date": AVEC_RELEASE_DATE,
+            "guidelines": GUIDELINES_VERSION,
+            "genome_assembly": f"GRCh38 ({GRCH38_ASSEMBLY_ACCESSION})",
+            "settings": {
+                "min_clinvar_review_stars": MIN_REVIEW_STARS,
+                "splice_flank_bp": SPLICE_FLANK_BP,
+            },
+        },
+        "assessed_at": assessed_at,
+        "cache_note": ("Live sources are queried during the assessment or served from AVEC's cache: Ensembl, "
+                       "ClinVar and LitVar2 answers for up to 24\u00a0h, HAWK-EYE and TReXome for up to 1\u00a0h."),
+        "sources": sources,
+    }
 
 
 def _build_transcript_info(
@@ -2976,21 +3661,30 @@ def _build_transcript_info(
     }
 
 
-def process_single_variant(query: str, client: EnsemblClient, splice_user_input: Optional[str] = None, moa_user_input: Optional[str] = None, exonic_pathogenic_user_input: Optional[str] = None, exon_skipping_overrides: Optional[Dict] = None, knockdown_overrides: Optional[Dict] = None, wt_upregulation_overrides: Optional[Dict] = None, gene_characteristics_overrides: Optional[Dict] = None, splice_switching_overrides: Optional[Dict] = None) -> Dict[str, Any]:
+def process_single_variant(query: str, client: EnsemblClient, splice_user_input: Optional[str] = None, moa_user_input: Optional[str] = None, exonic_pathogenic_user_input: Optional[str] = None, exon_skipping_overrides: Optional[Dict] = None, knockdown_overrides: Optional[Dict] = None, wt_upregulation_overrides: Optional[Dict] = None, gene_characteristics_overrides: Optional[Dict] = None, splice_switching_overrides: Optional[Dict] = None, all_mechanisms: bool = False, exon_pair_overrides: Optional[Dict] = None) -> Dict[str, Any]:
     """
-    Contains the complete assessment logic for a single variant query.
+    Contains the complete assessment logic for a single variant query. all_mechanisms lists the
+    gene-level strategies for every mechanism of action when none is given (used by the API).
+    exon_skipping_overrides apply to the single-exon result; exon_pair_overrides hold one set
+    per exon pair, by the pair result's "override_key".
     """
     exon_skipping_overrides = exon_skipping_overrides or {}
+    exon_pair_overrides = exon_pair_overrides or {}
     knockdown_overrides = knockdown_overrides or {}
     wt_upregulation_overrides = wt_upregulation_overrides or {}
     splice_switching_overrides = splice_switching_overrides or {}
     _refresh_n1c_if_stale()
+    assessed_at = _now_iso()
+    # The data-source releases are looked up alongside the assessment (cached for a day, so
+    # normally instant) and collected at the end for the provenance block
+    release_futures = _start_release_lookups()
     try:
         # --- 1. VEP and Consequence Selection ---
         hgvs_query, gene_symbol_from_query, requested_transcript_id = parse_hgvs_query(query)
         if not hgvs_query:
             return {"classification": "Error", "reason": "Invalid input format. Please use a recognized HGVS format (e.g., 'GENE c.123A>G')."}
 
+        _progress('vep', f"Annotating {hgvs_query} with Ensembl VEP")
         vep_data = client.vep_hgvs(hgvs_query)
         if not vep_data or not isinstance(vep_data, list):
             return {"classification": "Unable to Assess", "reason": f"VEP analysis failed for '{escape(hgvs_query)}'. The variant may be invalid or not found."}
@@ -3017,9 +3711,9 @@ def process_single_variant(query: str, client: EnsemblClient, splice_user_input:
         common_args = dict(
             vep_entry=vep_entry, hgvs_query=hgvs_query, splice_user_input=splice_user_input,
             moa_user_input=moa_user_input, exonic_pathogenic_user_input=exonic_pathogenic_user_input,
-            exon_skipping_overrides=exon_skipping_overrides, knockdown_overrides=knockdown_overrides,
+            exon_skipping_overrides=exon_skipping_overrides, exon_pair_overrides=exon_pair_overrides, knockdown_overrides=knockdown_overrides,
             wt_upregulation_overrides=wt_upregulation_overrides, gene_characteristics_overrides=gene_characteristics_overrides,
-            splice_switching_overrides=splice_switching_overrides, client=client
+            splice_switching_overrides=splice_switching_overrides, client=client, all_mechanisms=all_mechanisms
         )
 
         _t0 = time.perf_counter()
@@ -3038,6 +3732,7 @@ def process_single_variant(query: str, client: EnsemblClient, splice_user_input:
             alternate_consequence = default_consequence
 
         if alternate_consequence:
+            _progress('alternate', f"Repeating the assessment on the MANE Select/canonical transcript {alternate_consequence.get('transcript_id')}")
             _t0 = time.perf_counter()
             primary_result["alternative_result"] = _assess_for_transcript(alternate_consequence, **common_args)
             _log_timing("Alternate transcript assessment (total)", _t0)
@@ -3051,6 +3746,13 @@ def process_single_variant(query: str, client: EnsemblClient, splice_user_input:
             for result in (primary_result, primary_result.get("alternative_result")):
                 if result:
                     _add_summary_note(result, N1C_UNAVAILABLE_NOTE)
+
+        # Software version and data-source releases for the report; never allowed to fail the assessment
+        try:
+            results = [r for r in (primary_result, primary_result.get("alternative_result")) if r]
+            primary_result["provenance"] = _build_provenance(results, assessed_at, _collect_release_lookups(release_futures))
+        except Exception:
+            traceback.print_exc()
 
         return primary_result
 
@@ -3066,21 +3768,27 @@ app.config['MAX_CONTENT_LENGTH'] = 64 * 1024
 
 load_databases()
 
-def _send_asset(directory, filename):
-    """Serves an image file directly inside directory; nothing in subdirectories or of other types."""
-    if '/' in filename or '\\' in filename or os.path.splitext(filename)[1].lower() not in STATIC_ASSET_EXTENSIONS:
+def _send_asset(directory, filename, extensions=IMAGE_EXTENSIONS):
+    """Serves a file of one of the given types directly inside directory; nothing in subdirectories or of other types."""
+    extension = os.path.splitext(filename)[1].lower()
+    if '/' in filename or '\\' in filename or extension not in extensions:
         abort(404)
-    return send_from_directory(directory, filename)
+    return send_from_directory(directory, filename, mimetype=ASSET_MIMETYPES.get(extension))
 
 @app.route('/static/<path:filename>')
 def static_assets(filename):
-    """Serves the logo and figures in the DOCS_DIR root."""
-    return _send_asset(DOCS_DIR, filename)
+    """Serves the logo, figures, stylesheet and script in the DOCS_DIR root."""
+    return _send_asset(DOCS_DIR, filename, STATIC_ASSET_EXTENSIONS)
 
 @app.route('/guidelines/images/<path:filename>')
 def guideline_images(filename):
     """Serves the figures of the guidelines page."""
     return _send_asset(GUIDELINES_IMAGES_DIR, filename)
+
+@app.route('/fonts/<path:filename>')
+def fonts(filename):
+    """Serves the self-hosted web fonts."""
+    return _send_asset(FONTS_DIR, filename, {'.woff2'})
 
 @app.route('/')
 def index(): return send_from_directory(DOCS_DIR,'index.html')
@@ -3088,6 +3796,10 @@ def index(): return send_from_directory(DOCS_DIR,'index.html')
 def usage(): return send_from_directory(DOCS_DIR,'usage.html')
 @app.route('/guidelines')
 def guidelines(): return send_from_directory(DOCS_DIR,'guidelines.html')
+@app.route('/guidelines/N1C-VARIANT-Guidelines-2.0.pdf')
+def guidelines_pdf():
+    """Serves the guidelines PDF as a download."""
+    return send_from_directory(DOCS_DIR, GUIDELINES_PDF, mimetype='application/pdf', as_attachment=True)
 @app.route('/about')
 def about(): return send_from_directory(DOCS_DIR,'about.html')
 @app.route('/cite')
@@ -3102,7 +3814,8 @@ def api_docs():
 def api_assess():
     """
     Handles a single variant assessment via a POST request for programmatic access.
-    Returns the full assessment data as JSON.
+    Returns the full assessment data as JSON. The API takes no mechanism of action, so the
+    mechanism-dependent strategies are listed for each one under "mechanism_assessments".
     """
     data = request.get_json(silent=True)
     if not isinstance(data, dict) or not isinstance(data.get('query'), str):
@@ -3116,7 +3829,7 @@ def api_assess():
 
     client = EnsemblClient()
     _t0 = time.perf_counter()
-    result = process_single_variant(query, client)
+    result = process_single_variant(query, client, all_mechanisms=True)
     _log_timing("Total assessment", _t0)
 
     # Provide specific HTTP status codes based on the outcome
@@ -3128,31 +3841,78 @@ def api_assess():
     
     return jsonify(result)
 
+def _frontend_assessment_args(data: Any) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """Reads a /assess or /assess/stream request body into process_single_variant keyword
+    arguments. Returns (kwargs, None), or (None, reason) when the body is unusable."""
+    if not isinstance(data, dict) or not isinstance(data.get('query'), str):
+        return None, "No query provided."
+    if len(data['query']) > MAX_QUERY_LENGTH:
+        return None, f"Query exceeds the maximum length of {MAX_QUERY_LENGTH} characters."
+    # Overrides are looked up with .get(); anything that isn't a JSON object is ignored
+    as_dict = lambda value: value if isinstance(value, dict) else {}
+    return dict(
+        query=data['query'],
+        splice_user_input=data.get('splice_user_input'),
+        moa_user_input=data.get('moa_user_input'),
+        exonic_pathogenic_user_input=data.get('exonic_pathogenic_user_input'),
+        exon_skipping_overrides=as_dict(data.get('exon_skipping_overrides')),
+        exon_pair_overrides={key: value for key, value in as_dict(data.get('exon_pair_overrides')).items() if isinstance(value, dict)},
+        knockdown_overrides=as_dict(data.get('knockdown_overrides')),
+        wt_upregulation_overrides=as_dict(data.get('wt_upregulation_overrides')),
+        gene_characteristics_overrides=as_dict(data.get('gene_characteristics_overrides')) or None,
+        splice_switching_overrides=as_dict(data.get('splice_switching_overrides')),
+    ), None
+
 @app.route('/assess', methods=['POST'])
 def assess():
     """Handles a single variant assessment request from the frontend."""
-    data = request.get_json(silent=True)
-    if not isinstance(data, dict) or not isinstance(data.get('query'), str):
-        return jsonify({"classification": "Error", "reason": "No query provided."}), 400
-    if len(data['query']) > MAX_QUERY_LENGTH:
-        return jsonify({"classification": "Error", "reason": f"Query exceeds the maximum length of {MAX_QUERY_LENGTH} characters."}), 400
-    # Overrides are looked up with .get(); anything that isn't a JSON object is ignored
-    as_dict = lambda value: value if isinstance(value, dict) else {}
-    query = data['query']
-    splice_input = data.get('splice_user_input')
-    exonic_pathogenic_user_input = data.get('exonic_pathogenic_user_input')
-    moa_input = data.get('moa_user_input')
-    es_overrides = as_dict(data.get('exon_skipping_overrides'))
-    kd_overrides = as_dict(data.get('knockdown_overrides'))
-    wt_overrides = as_dict(data.get('wt_upregulation_overrides'))
-    gene_char_overrides = as_dict(data.get('gene_characteristics_overrides')) or None
-    ss_overrides = as_dict(data.get('splice_switching_overrides'))
-    client = EnsemblClient()
+    kwargs, error = _frontend_assessment_args(request.get_json(silent=True))
+    if error:
+        return jsonify({"classification": "Error", "reason": error}), 400
     _t0 = time.perf_counter()
-    result = process_single_variant(query, client, splice_user_input=splice_input, moa_user_input=moa_input, exonic_pathogenic_user_input=exonic_pathogenic_user_input, exon_skipping_overrides=es_overrides, knockdown_overrides=kd_overrides, wt_upregulation_overrides=wt_overrides, gene_characteristics_overrides=gene_char_overrides, splice_switching_overrides=ss_overrides)
+    result = process_single_variant(client=EnsemblClient(), **kwargs)
     _log_timing("Total assessment", _t0)
 
     return jsonify(result)
+
+@app.route('/assess/stream', methods=['POST'])
+def assess_stream():
+    """Same assessment as /assess, streamed as newline-delimited JSON so the frontend can show
+    what is being queried: {"type": "progress", "step", "label"} lines while the assessment
+    runs, then one {"type": "result", "data"} line holding what /assess would have returned."""
+    kwargs, error = _frontend_assessment_args(request.get_json(silent=True))
+    if error:
+        return jsonify({"classification": "Error", "reason": error}), 400
+
+    events: "queue.Queue[Dict[str, Any]]" = queue.Queue()
+
+    def run():
+        _PROGRESS.report = lambda step, label: events.put({"type": "progress", "step": step, "label": label})
+        _t0 = time.perf_counter()
+        try:
+            result = process_single_variant(client=EnsemblClient(), **kwargs)
+        except Exception:
+            traceback.print_exc()
+            result = {"classification": "Error", "reason": "An unexpected server error occurred. Please try again later."}
+        finally:
+            _PROGRESS.report = None
+        _log_timing("Total assessment", _t0)
+        events.put({"type": "result", "data": result})
+
+    # The assessment runs on its own thread so this response can stream its progress meanwhile
+    threading.Thread(target=run, daemon=True).start()
+
+    def stream():
+        while True:
+            event = events.get()
+            # Serialized like jsonify (Decimal, dates, ...); one line per event
+            yield app.json.dumps(event) + "\n"
+            if event["type"] == "result":
+                return
+
+    # X-Accel-Buffering asks nginx-style proxies to pass each line on instead of buffering
+    return Response(stream(), mimetype='application/x-ndjson',
+                    headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
 
 if __name__ == '__main__':
     app.run()

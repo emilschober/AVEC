@@ -6,7 +6,7 @@
     <title>API - AVEC</title>
     <link rel="icon" href="/static/favicon.ico">
     <link rel="preload" href="/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/static/avec.css?v=12">
+    <link rel="stylesheet" href="/static/avec.css?v=13">
 </head>
 <body>
     <script src="/static/avec.js?v=8"></script>
@@ -70,6 +70,8 @@
             <li><code>mechanism_assessments</code>: the mechanism-dependent strategies for each mechanism of action, keyed <code>GoF</code>, <code>LoF</code> and <code>DN</code>. Each holds the <code>Knockdown</code>, <code>WT_Upregulation</code> and <code>N1C_Gene_Knockdown</code> results that apply to that mechanism and the gene's mode of inheritance, in the same shape as the entries in <code>assessments</code>. An empty object means no mechanism-dependent strategy applies (for example loss of function in a recessive gene). An established ASO in the N1C registry ends the assessment early, so this key is then absent.</li>
             <li><code>transcript_info</code> (only when the query names a transcript) and <code>alternative_result</code> (the assessment on the MANE Select/canonical transcript, when it differs from the requested one).</li>
             <li><code>visualization</code>: the genome browser tracks shown in the web interface.</li>
+            <li><code>hawkeye</code> (on the single-exon <code>Exon_Skipping</code> result): HAWK-EYE's independent exon record, looked up by the exon's GRCh38 coordinates. <code>found</code> says whether HAWK-EYE holds an assessment for the exon and <code>unavailable</code> whether its API could not be reached; when found, it carries HAWK-EYE's <code>assessment</code> (its dispensability verdict) and <code>explanation</code>, its own <code>gene</code>, <code>exon</code>, <code>transcript_id</code> and exon coordinates, the ASO candidates it designed for the exon in <code>asos</code> with their <code>aso_count</code>, and a <code>url</code> to the exon-skipping results on the HAWK-EYE website. It is reported for information only and does not affect AVEC's own classification. The <code>Knockdown</code> result carries <code>hawkeye_knockdown</code> in the same spirit: <code>snp_count</code> targetable heterozygous SNPs, <code>aso_count</code> ASO sequences against them, and a <code>url</code>.</li>
+            <li><code>provenance</code>: what produced this result, for reproducing or citing it. <code>software</code> holds the AVEC <code>version</code> and <code>release_date</code>, the <code>guidelines</code> version, the <code>genome_assembly</code> and the assessment <code>settings</code>. <code>assessed_at</code> is the time of the assessment. <code>sources</code> lists every data source, each with its <code>name</code>, what it <code>provides</code>, its <code>kind</code> (<code>live</code> for a service queried online, <code>bundled</code> for a file shipped with AVEC), its <code>version</code> or release, and a <code>status</code>: <code>used</code>, <code>unavailable</code> (could not be reached or loaded), <code>not queried</code> (not needed for this variant), <code>as needed</code> or <code>link</code> (only linked to). Where a source publishes no version (<code>publishes_version</code> is false), <code>accessed_at</code> or, for the N1C registry snapshot, <code>loaded_at</code> says when it was read. Bundled files also carry their <code>file</code> name, the first 12 digits of their <code>sha256</code> and their number of <code>rows</code>.</li>
         </ul>
     </li>
     <li>On failure, the response is a JSON object with an <code>error</code> key and an HTTP status code: 400 (missing, invalid or too long query), 404 (the variant could not be assessed, e.g. not found by VEP), 413 (request body larger than 64 KB) or 500 (server error).</li>
@@ -90,6 +92,14 @@
         "domain_count": 2,
         "exon_length": 126,
         "frac_cds": "4.36%",
+        "hawkeye": {
+          "found": true,
+          "assessment": "Dispensable",
+          "exon": 4,
+          "aso_count": 12,
+          "asos": [ { "aso_sequence": "...", "idt_format_aso": "...", "acute_neurotoxicity_score": "..." } ],
+          "url": "https://hawk-eye.research.sickkids.ca/exon-skipping/results?genes=PACS1"
+        },
         "min_review_stars_applied": 2,
         "reason": "Exon overlaps with 2 protein domain(s).",
         "total_exon_number": "4 / 24",
@@ -117,6 +127,23 @@
     "LoF": {
       "WT_Upregulation": { "classification": "Potential possibilities identified", ... }
     }
+  },
+  "provenance": {
+    "assessed_at": "2026-11-08T14:37:31+01:00",
+    "software": {
+      "name": "AVEC", "version": "1.0.0", "release_date": "2026-11-08",
+      "guidelines": "N1C VARIANT Guidelines 2.0 (July 2026)",
+      "genome_assembly": "GRCh38 (GCA_000001405.29)",
+      "settings": { "min_clinvar_review_stars": 2, "splice_flank_bp": 2 }
+    },
+    "sources": [
+      { "name": "Ensembl REST API and VEP", "kind": "live", "version": "Ensembl 116", "status": "used", "accessed_at": "2026-11-08T14:37:31+01:00", ... },
+      { "name": "NCBI ClinVar (E-utilities)", "kind": "live", "version": "Build261101-1245.1, updated 2026/11/01 16:09", "status": "used", ... },
+      { "name": "HAWK-EYE exon skipping (REST API)", "kind": "live", "version": null, "publishes_version": false, "status": "used", ... },
+      { "name": "SpliceVarDB", "kind": "bundled", "version": "Download of 2025-10-09", "file": "SpliceVarDbHgvs.xlsx", "sha256": "e91129fccf40", "rows": 50715, "status": "used", ... },
+      ...
+    ],
+    ...
   },
   "summary": {
     "gene": "PACS1",

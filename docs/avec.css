@@ -793,7 +793,29 @@ body.dark .checklist li.pass::before {
 .pubmed-accordion .acc-icon { flex-basis: 22px; width: 22px; height: 22px; }
 .pubmed-accordion > .result-block { padding: 8px 4px 16px; }
 
-.report-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+.report-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 14px; }
+
+/* Software and data versions: facts in the summary's label-over-value style, then one row per source */
+.prov-facts {
+    list-style: none; margin: 0 0 20px; padding: 0;
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    border-top: 1px solid var(--rule);
+}
+.prov-facts li { margin: 0; padding: 8px 16px 8px 0; border-bottom: 1px solid var(--rule); }
+.prov-facts li > strong:first-child { display: block; font-size: .8125rem; font-weight: 600; color: var(--muted); }
+.prov-scroll { overflow-x: auto; }
+.prov-table { width: 100%; border-collapse: collapse; font-size: .9375rem; line-height: 1.45; }
+.prov-table th, .prov-table td { text-align: left; vertical-align: top; padding: 10px 14px 10px 0; border-bottom: 1px solid var(--rule-soft); }
+.prov-table thead th { font-size: .8125rem; font-weight: 600; color: var(--muted); border-bottom: 1px solid var(--rule); white-space: nowrap; }
+.prov-table tbody th { font-weight: 600; }
+.prov-table td:nth-child(3) { font-variant-numeric: tabular-nums; }
+.prov-table code { font-size: .8125rem; overflow-wrap: anywhere; }
+.prov-sub { display: block; font-weight: 400; font-size: .875rem; color: var(--muted); }
+.prov-muted { color: var(--muted); }
+.prov-nowrap { white-space: nowrap; }
+.prov-status { font-weight: 600; white-space: nowrap; }
+.prov-status--unavailable { color: var(--danger); }
+.prov-status--not-queried, .prov-status--link, .prov-status--as-needed { font-weight: 400; color: var(--muted); }
 
 /* ---------- Motion ----------
    One entrance per page load; everything else answers what the reader does. */
@@ -964,7 +986,7 @@ a { transition: color .15s ease, text-decoration-color .15s ease; }
 .copy-btn:active { transform: scale(.96); }
 .is-confirmed { color: var(--good-ink); }
 .copy-btn.is-confirmed { border-color: var(--good-edge); background: var(--good-tint); }
-#download-report-btn.is-confirmed { background: var(--good-solid); border-color: var(--good-solid); color: var(--good-on); }
+#download-report-btn.is-confirmed, .btn--primary.is-confirmed { background: var(--good-solid); border-color: var(--good-solid); color: var(--good-on); }
 .draw-check { width: 16px; height: 16px; }
 .draw-check path { stroke-dasharray: 1; animation: draw-check .45s var(--ease-out) both; }
 @keyframes draw-check { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
@@ -1273,6 +1295,13 @@ html.theme-switching *, html.theme-switching *::before, html.theme-switching *::
     .query-form__top { flex-direction: column; gap: 0; }
     .query-format { text-align: left; }
     .summary-block ul { grid-template-columns: 1fr; }
+    /* Data sources: one stacked card per source, each value under its column name */
+    .prov-facts { grid-template-columns: 1fr; }
+    .prov-table thead { display: none; }
+    .prov-table, .prov-table tbody, .prov-table tr, .prov-table th, .prov-table td { display: block; }
+    .prov-table tr { padding: 10px 0; border-bottom: 1px solid var(--rule-soft); }
+    .prov-table th, .prov-table td { border: 0; padding: 2px 0; }
+    .prov-table td::before { content: attr(data-label); display: block; font-size: .75rem; font-weight: 600; color: var(--muted); margin-top: 6px; }
     .acc-heading, .link-row__inner { font-size: 1.0625rem; }
     .accordion-toggle, .link-row__inner { gap: 10px; }
     /* No room for the methods link beside the status: it follows the + instead */

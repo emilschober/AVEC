@@ -1,278 +1,93 @@
-
 <!doctype html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>About/Methods - AVEC</title>
+    <title>About - AVEC</title>
+    <link rel="icon" href="/static/favicon.ico">
+    <link rel="preload" href="/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="/static/avec.css?v=13">
     <style>
-        body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;margin:0;background-color:#f8f9fa;color:#333}
-        .container{max-width:900px;margin:auto;background:var(--card);padding:2em;border-radius:8px;box-shadow:0 4px 8px rgba(0,0,0,.1); margin-top: 2em; margin-bottom: 2em;}
-        h3,h4,h5{color:#005a9c} a{color:#005a9c; text-decoration: none;} a:hover{text-decoration: underline;}
-        nav {background-color: #333; padding: 1em; text-align: center;}
-        /* THIS IS THE ONLY CHANGE IN THIS BLOCK: Added API link */
-        nav a {color: white; margin: 0 15px; text-decoration: none; font-weight: bold;}
-        .disclaimer{font-size:.8em;color:#6c757d;margin-top:2em;text-align:center; padding-top: 1em; border-top: 1px solid #eee;}
-        form{display:grid;grid-template-columns:1fr;gap:1em;align-items:center;margin-bottom:2em}
-        input,button{padding:.75em;border-radius:4px;border:1px solid #ccc;font-size:1em;width:100%;box-sizing:border-box}
-        button{background-color:#007bff;color:white;font-weight:bold;cursor:pointer;border:none;width:auto;justify-self:end;padding:.75em 1.5em}
-        button:hover{background-color:#0056b3}
-        #loader{display:none;text-align:center;padding:1em;font-size:1.2em}
-        #results{display:none}.result-header{padding:1em;color:white;border-radius:4px 4px 0 0;margin-bottom:0;}.result-header h4{margin:0;font-size:1.5em;text-align:center;color:inherit;}
-        .result-block{border: 1px solid #ddd; border-top: none; padding: 1em; margin-bottom: 1.5em; border-radius: 0 0 4px 4px;}.result-block h5{margin-bottom:.5em;color:#495057;border-bottom:1px solid #eee;padding-bottom:.3em; margin-top: 0;}
-        .checklist{list-style-type:none;padding:0}.checklist li{margin-bottom:.5em}.pass::before{content:'¹3';color:#28a745;margin-right:10px;font-weight:bold}.fail::before{content:'¹7';color:#dc3545;margin-right:10px;font-weight:bold}
-        .eligible{background-color:#28a745}.likely-eligible{background-color:#17a2b8}.unlikely-eligible{background-color:#ffc107;color:#333 !important;}.not-eligible{background-color:#dc3545}.unable-to-assess{background-color:#6c757d}.error{background-color:#dc3545}.note{font-style:italic;color:#555;font-size:.9em}
-        .strategy-block {margin-bottom: 2em;}
-        .summary-block { background-color: #e9ecef; padding: 1em; border-radius: 4px; margin-bottom: 2em; }
-        #igv-container { border: 1px solid #ddd; margin-top: 2em; margin-bottom: 1.5em; }
-        /* Style for code blocks in API docs */
-        pre { background-color: #f0f0f0; border: 1px solid #ddd; border-radius: 4px; padding: 1em; white-space: pre-wrap; word-wrap: break-word; font-family: 'Courier New', Courier, monospace; }
-        /* PubMed results list */
-        .pubmed-list { list-style: none; margin: .5em 0 0 0; padding: 0; display: grid; gap: .75em; }
-        .pubmed-card { border: 1px solid var(--border); border-radius: 8px; padding: .75em .9em; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.03); }
-        .pubmed-title { font-weight: 600; margin: 0 0 .25em; color: #0f172a; }
-        .pubmed-meta { color: #555; font-size: 0.9em; }
-        .pubmed-card-footer { margin-top: .6em; text-align: right; }
-        .pubmed-article-link { display:inline-block; padding: .35em .6em; border: 1px solid var(--border); border-radius: 6px; text-decoration: none; color: #0c63bd; background:#f8fafc }
-        .pubmed-article-link:hover { background:#eef2f7 }
-        .pubmed-footer { margin-top: 1em; text-align: center; }
-        .pubmed-footer a { text-decoration: none; padding:.4em .75em; border-radius:6px; border:1px solid var(--border); color:#0c63bd; background:#fff }
-        .pubmed-footer a:hover { background:#f8fafc }
-        /* Domain list styling */
-        .domain-list { margin: .35em 0 0 0; padding-left: 1.1em; }
-        .domain-list li { margin: 0 0 .2em 0; }
-        /* PubMed accordion spacing */
-        .pubmed-accordion { margin-top: 1em; }
-        .pubmed-accordion .result-header, .pubmed-accordion .result-header h5 { color: #fff; }
-
-        /* Info icon for linking to methods */
-        .info-link { margin-left: 8px; color: inherit; text-decoration: none; font-size: 0.8em; opacity: 0.8; }
-        .info-link:hover { opacity: 1; }
-
-        /* Beauty overrides and enhancements */
-        :root{--primary:#0d6efd;--primary-dark:#0b5ed7;--text:#333;--muted:#6c757d;--bg:#f7f8fb;--card:#ffffff;--border:#e6e9ef;--ok:#28a745;--info:#17a2b8;--warn:#ffc107;--bad:#dc3545;--neutral:#6c757d}
-        body{background:linear-gradient(180deg,#f8fafc 0%,#eef2f7 100%)}
-        .container{max-width:980px;border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,.08)}
-        nav{background:#222;box-shadow:0 2px 6px rgba(0,0,0,.15);padding:.85em 1em}
-        nav{position:relative;display:flex;align-items:center;justify-content:center}
-        nav .logo{position:absolute;left:1rem;top:50%;transform:translateY(-50%);display:flex;align-items:center}
-        nav .logo img{height:40px;width:auto;filter:brightness(0) invert(1)}
-        nav .links{display:flex;align-items:center;gap:12px}
-        nav .links a{opacity:.9;font-weight:600;margin:0 12px;color:#f3f3f3;text-decoration:none}
-        nav .links a:hover{opacity:1}
-        .theme-toggle{position:absolute;right:1rem;top:50%;transform:translateY(-50%);background:transparent;border:1px solid var(--border);color:#f3f3f3;border-radius:999px;padding:.35em .7em;cursor:pointer}
-        .theme-toggle:hover{background:rgba(255,255,255,.06)}
-        .disclaimer{font-size:.85em;border-top:1px solid var(--border)}
-        #assessment-form{grid-template-columns:120px 1fr auto}
-        #assessment-form label{margin:0;font-weight:600;color:#495057}
-        input,button{border-radius:6px;border:1px solid #cfd4dc}
-        button{background:var(--primary);box-shadow:0 2px 8px rgba(13,110,253,.25)}
-        button:hover{background:var(--primary-dark)}
-        .result-header{border-radius:10px 10px 0 0}
-        .result-header h4{font-size:1.2em;letter-spacing:.2px}
-        .accordion-toggle .chevron{display:inline-block;margin-left:.4em;transition:transform .2s ease}
-        .accordion-toggle.open .chevron{transform:rotate(180deg)}
-        /* Rounded corners when collapsed; squared bottom when open */
-        .accordion-toggle{border-radius:10px}
-        .accordion-toggle.open{border-radius:10px 10px 0 0}
-        .result-block{border:1px solid var(--border);border-top:none;border-radius:0 0 10px 10px;box-shadow:0 8px 18px rgba(0,0,0,.04)}
-        .result-block h5{color:#334155;border-bottom:1px solid var(--border)}
-        .summary-block{background:#eef2f7;border:1px solid var(--border);border-radius:10px}
-        .summary-block ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.6em 1em}
-        .summary-block li{background:#fff;border:1px solid var(--border);padding:.5em .75em;border-radius:8px}
-        /* Checklist visual polish and correct symbols */
-        .checklist{margin:0}
-        .checklist li{padding:.5em .75em;border-radius:6px;border:1px solid}
-        /* Ensure no duplicate icons from pseudo-elements */
-        .checklist li.pass::before, .checklist li.fail::before{content:'' !important; display:none}
-        .checklist li.pass{background:#ecfdf3;border-color:#c6f6d5;color:#14532d}
-        .checklist li.fail{background:#fef2f2;border-color:#fecaca;color:#7f1d1d}
-        .checklist li .ic{display:inline-block;width:1.25em;text-align:center;font-weight:700;margin-right:.4em}
-        /* Override checklist for interactive mode */
-        .checklist.interactive li { cursor: pointer; user-select: none; transition: background-color 0.1s ease, border-color 0.1s ease; position: relative; }
-        .checklist.interactive li:hover { background-color: #e9ecef; }
-        .checklist.interactive li:hover::after { content: 'click for manual override'; position: absolute; right: 10px; font-size: 0.85em; color: var(--muted); font-style: italic; }
-        body.dark .checklist.interactive li:hover { background-color: #2c2c2c; }
-        .override-controls { text-align: center; }
-
-        /* Chips and controls */
-        .chip{display:inline-block;padding:.15em .5em;border-radius:999px;font-size:.8em;border:1px solid var(--border);background:#fff;color:#334155;margin-left:.5em}
-        .chip-ok{background:#ecfdf3;border-color:#bbf7d0;color:#166534}
-        .chip-warn{background:#fffbeb;border-color:#fde68a;color:#92400e}
-        .expand-controls{display:flex;gap:.5em;justify-content:flex-end;margin: .25em 0 1em}
-        .expand-controls .secondary{background:#fff;color:#334155;border:1px solid var(--border);padding:.4em .8em;border-radius:6px;cursor:pointer}
-        .expand-controls .secondary:hover{background:#f8fafc}
-        /* Compact status chip for headers */
-        .chip-status{display:inline-block;padding:.15em .55em;border-radius:999px;font-size:.82em;border:1px solid var(--border);font-weight:600;margin-left:.5em}
-        .status-eligible{background:#14532d;color:#e6faef;border-color:#14532d}
-        .status-likely-eligible{background:#0f4c5c;color:#e7f6fb;border-color:#0e7490}
-        .status-unlikely-eligible{background:#fef3c7;color:#7c2d12;border-color:#f59e0b}
-        .status-not-eligible{background:#7f1d1d;color:#fee2e2;border-color:#991b1b}
-        .status-unable-to-assess{background:#334155;color:#e2e8f0;border-color:#334155}
-        .status-error{background:#991b1b;color:#fee2e2;border-color:#991b1b}
-        /* Professional-looking header colors */
-        .eligible{background:linear-gradient(135deg,#15803d,#22c55e); color:#fff}
-        .likely-eligible{background:linear-gradient(135deg,#0ea5e9,#06b6d4); color:#fff}
-        .unlikely-eligible{background:linear-gradient(135deg,#f59e0b,#fbbf24); color:#111827}
-        .not-eligible{background:linear-gradient(135deg,#dc2626,#ef4444); color:#fff}
-        .unable-to-assess{background:linear-gradient(135deg,#64748b,#94a3b8); color:#fff}
-        .error{background:linear-gradient(135deg,#b91c1c,#ef4444); color:#fff}
-        /* Dark mode overrides */
-        body.dark{--bg:#111111;--card:#1b1b1b;--text:#e5e7eb;--muted:#a3a3a3;--border:#333333;--primary:#60a5fa;--primary-dark:#3b82f6}
-        body.dark{color:var(--text)}
-        body.dark a{color:#93c5fd}
-        body.dark nav .links a, body.dark .theme-toggle{color:#e5e7eb}
-        body.dark .container{box-shadow:0 6px 18px rgba(0,0,0,.5)}
-        body.dark .summary-block{background:#202020;border-color:#333333}
-        body.dark .summary-block li{background:#161616;border-color:#333333;color:var(--text)}
-        body.dark .result-block{border-color:#333333;background:#161616;box-shadow:0 8px 18px rgba(0,0,0,.5)}
-        /* Dark mode form controls */
-        body.dark input, body.dark select, body.dark textarea{background:#161616;border:1px solid #333333;color:var(--text)}
-        body.dark .expand-controls .secondary{background:#161616;color:#e5e7eb;border:1px solid #333333}
-        body.dark .expand-controls .secondary:hover{background:#202020}
-        /* Dark mode checklist tints */
-        body.dark .checklist li.pass{background:#0f2e1c;border-color:#14532d;color:#bbf7d0}
-        body.dark .checklist li.fail{background:#2a1414;border-color:#7f1d1d;color:#fecaca}
-        /* Dark mode PubMed cards */
-        body.dark .pubmed-card{background:#161616;border-color:#333333}
-        body.dark .pubmed-title{color:#e5e7eb}
-        body.dark .pubmed-article-link{background:#161616;border-color:#333333;color:#93c5fd}
-        body.dark .pubmed-article-link:hover{background:#202020}
-        body.dark .pubmed-footer a{background:#161616;border-color:#333333;color:#93c5fd}
-        body.dark .pubmed-footer a:hover{background:#202020}
-        /* Dark mode API docs code blocks */
-        body.dark pre{background:#161616;border-color:#333333;color:#e5e7eb}
-        body.dark code{color:#e5e7eb}
-        body.dark pre code{color:#e5e7eb}
-        /* Dark mode navbar blends into background */
-        body.dark nav { background-color: #111111; }
-        /* Dark mode IGV inversion trick */
-        body.dark #igv-container{background:#161616; filter: invert(0.92) hue-rotate(180deg)}
-        /* Loader spinner */
-        #loader{position:relative}
-        #loader:after{content:'';display:inline-block;width:1em;height:1em;margin-left:.5em;border:2px solid #cfd4dc;border-top-color:var(--primary);border-radius:50%;animation:spin 1s linear infinite;vertical-align:-2px}
-        @keyframes spin{to{transform:rotate(360deg)}}
-        /* Dark background override */
-        body.dark{ background: linear-gradient(180deg,#111111 0%, #0c0c0c 100%); }
-        @media (max-width: 640px){
-            #assessment-form{grid-template-columns:1fr}
-            .container{padding:1em; margin-top:1em}
-        }
-    /* Tab system */
-    .tab-nav {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0;
-        margin-bottom: 20px;
-        border-bottom: 1px solid var(--border);
-    }
+    /* Tabs */
+    /* As wide as the tabs, so the rule under them ends with the last one */
+    .tab-nav { display: flex; flex-wrap: wrap; gap: 0 2px; margin: 0 0 28px; border-bottom: 1px solid var(--rule); width: fit-content; max-width: none; }
     .tab-btn {
-        background: transparent;
-        border: none;
-        border-bottom: 3px solid transparent;
-        color: var(--muted);
-        padding: 10px 20px;
-        cursor: pointer;
-        font-weight: 600;
-        font-size: 1em;
-        transition: all 0.2s ease;
-        border-radius: 4px 4px 0 0;
-        box-shadow: none;
-        width: auto;
-        margin: 0;
+        background: none; border: 0; border-bottom: 3px solid transparent; margin-bottom: -1px;
+        color: var(--ink-2); padding: 12px 14px; cursor: pointer; font-weight: 600; font-size: .8125rem;
+        letter-spacing: .05em; text-transform: uppercase;
     }
-    .tab-btn:hover { color: var(--text); background-color: rgba(0,0,0,0.03); }
-    body.dark .tab-btn:hover { background-color: rgba(255,255,255,0.05); color: var(--text); }
-    .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); background-color: transparent; }
-    .tab-pane { display: none; animation: fadeIn 0.3s ease-in-out; line-height: 1.6; }
-    .tab-pane.active { display: block; }
-    .tab-pane h4 { margin-top: 0; margin-bottom: 1em; color: var(--text); border-bottom: 1px solid var(--border); padding-bottom: 0.5em; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+    .tab-btn:hover { color: var(--ink); background: var(--surface-2); }
+    .tab-btn.active { color: var(--head); border-bottom-color: var(--coral); background: none; }
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; animation: fadeIn .25s ease-in-out; }
+    .tab-pane > h2:first-child { margin-top: 0; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
     /* Content blocks */
-    .toc-block { background: #f8f9fa; padding: 1em; border-left: 4px solid #005a9c; margin-bottom: 2em; color: #333; }
-    body.dark .toc-block { background: rgba(255,255,255,0.05); border-left-color: var(--primary); color: var(--text); }
-    .calculation-block { background: #f8f9fa; padding: 10px; border-radius: 4px; font-family: monospace; margin: 1em 0; border: 1px solid var(--border); color: #333; }
-    body.dark .calculation-block { background: rgba(255,255,255,0.05); color: var(--text); border-color: var(--border); }
-    .warning-block { background-color: #fffbeb; padding: 15px; border-left: 5px solid #ff9800; margin: 20px 0; color: #333; }
-    body.dark .warning-block { background: rgba(255,152,0,0.15); color: var(--text); border-left-color: #ff9800; }
+    .toc-block { background: var(--surface-2); border-left: 4px solid var(--ink); padding: 1em 1.2em; margin: 0 0 2em; }
+    .calculation-block { background: var(--surface-2); padding: 10px 12px; font-family: var(--mono); font-size: .9375rem; margin: 1em 0; border: 1px solid var(--rule); }
+    .warning-block { background: var(--warn-bg); padding: 14px 18px; border-left: 4px solid var(--warn-edge); margin: 20px 0; }
     /* Classification tables */
-    .classification-table { width: 100%; border-collapse: collapse; margin-top: 1em; font-size: 0.95em; }
-    .classification-table th, .classification-table td { border: 1px solid #ddd; padding: 8px 12px; vertical-align: top; }
-    .classification-table th { background-color: #f1f1f1; text-align: left; width: 25%; color: #333; }
-    .bg-green { background-color: #e8f5e9; color: #333; }
-    .bg-blue { background-color: #e1f5fe; color: #333; }
-    .bg-orange { background-color: #fff3e0; color: #333; }
-    .bg-red { background-color: #ffebee; color: #333; }
-    body.dark .classification-table th { background-color: rgba(255,255,255,0.1); color: var(--text); border-color: var(--border); }
-    body.dark .classification-table td { border-color: var(--border); color: var(--text); }
-    body.dark .bg-green { background-color: rgba(20,83,45,0.6); color: #e6faef; }
-    body.dark .bg-blue { background-color: rgba(12,74,110,0.6); color: #e0f2fe; }
-    body.dark .bg-orange { background-color: rgba(124,45,18,0.6); color: #ffedd5; }
-    body.dark .bg-red { background-color: rgba(127,29,29,0.6); color: #fee2e2; }
+    .classification-table { width: 100%; border-collapse: collapse; margin-top: 1em; font-size: .9375rem; }
+    .classification-table th, .classification-table td { border: 1px solid var(--rule); padding: 8px 12px; vertical-align: top; }
+    .classification-table th { background: var(--surface-2); color: var(--head); text-align: left; width: 25%; }
+    .bg-green { background: var(--good-tint); }
+    .bg-blue { background: var(--fair-tint); }
+    .bg-orange { background: var(--caution-tint); }
+    .bg-red { background: var(--bad-tint); }
     /* Figures */
-    .responsive-img { display: block; max-width: 100%; height: auto; margin: 1.5em auto; border-radius: 6px; }
-    .img-caption { text-align: left; color: var(--text); margin-top: -1em; margin-bottom: 1.5em; }
+    .responsive-img { display: block; max-width: 100%; height: auto; margin: 1.5em auto; }
+    .img-caption { color: var(--ink-2); margin-top: -1em; margin-bottom: 1.5em; font-size: .9375rem; }
     body.dark .responsive-img[alt="Possible aberrant splicing effects of canonical splice site variants"] { background-color: #fff; padding: 8px; }
     </style>
 </head>
 <body>
-    <nav>
-        <div class="logo">
-            <img src="/static/ukk_logo.png" alt="Universität zu Köln">
+    <script src="/static/avec.js?v=8"></script>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+        <div class="site-header__inner">
+            <a class="brand" href="/">
+                <img class="brand__uni" src="/static/uni_logo_header.png" alt="University of Cologne" width="128" height="48">
+                <span class="brand__name"><strong>AVEC</strong><span>Advanced Variant Eligibility Calculator</span></span>
+            </a>
+            <nav class="site-nav" aria-label="Main">
+                <a href="/">Tool</a>
+                <a href="/usage">Usage</a>
+                <a href="/guidelines">Guidelines</a>
+                <a href="/about">About &amp; methods</a>
+                <a href="/cite">How to cite</a>
+                <a href="/api_docs">API</a>
+            </nav>
+            <button id="theme-toggle" class="theme-toggle" type="button" aria-pressed="false" aria-label="Dark theme" title="Dark theme">
+                <svg class="icon-moon" viewBox="0 0 20 20" aria-hidden="true"><path d="M16.5 12.4A7 7 0 0 1 7.6 3.5a7 7 0 1 0 8.9 8.9z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+                <svg class="icon-sun" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="3.6" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M10 1.8v2.4M10 15.8v2.4M1.8 10h2.4M15.8 10h2.4M4.2 4.2l1.7 1.7M14.1 14.1l1.7 1.7M4.2 15.8l1.7-1.7M14.1 5.9l1.7-1.7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+            </button>
         </div>
-        <div class="links">
-            <a href="/">Tool</a>
-            <a href="/usage">Usage</a>
-            <a href="/about">About/Methods</a>
-            <a href="/cite">How to Cite</a>
-            <a href="/api_docs">API</a>
-        </div>
-        <button id="theme-toggle" class="theme-toggle" aria-pressed="false" title="Toggle dark mode">🌙</button>
-    </nav>
-    <script>
-        (function(){
-            const key = 'theme';
-            const btn = document.getElementById('theme-toggle');
-            function apply(t){
-                const dark = (t === 'dark');
-                document.body.classList.toggle('dark', dark);
-                if (btn) {
-                    btn.textContent = dark ? '☀️' : '🌙';
-                    btn.setAttribute('aria-pressed', String(dark));
-                }
-            }
-            let saved = localStorage.getItem(key);
-            if (!saved) saved = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-            apply(saved);
-            btn && btn.addEventListener('click', () => {
-                const next = document.body.classList.contains('dark') ? 'light' : 'dark';
-                localStorage.setItem(key, next);
-                apply(next);
-            });
-        })();
-    </script>
-    <main class="container">
-<h3>About & Methods</h3>
+    </header>
+    <div class="spheres" aria-hidden="true"><span class="sphere sphere--fill"></span><span class="sphere sphere--dots"></span><span class="sphere sphere--ring"></span></div>
+
+    <main id="main" class="page prose">
+<p class="eyebrow">AVEC</p>
+<h1>About &amp; methods</h1>
 
 <div class="tab-nav">
     <button class="tab-btn active" onclick="openTab('general')">General</button>
-    <button class="tab-btn" onclick="openTab('splice')">Splice Correction</button>
-    <button class="tab-btn" onclick="openTab('skipping')">Exon Skipping</button>
+    <button class="tab-btn" onclick="openTab('splice')">Splice correction</button>
+    <button class="tab-btn" onclick="openTab('skipping')">Exon skipping</button>
     <button class="tab-btn" onclick="openTab('knockdown')">Knockdown</button>
-    <button class="tab-btn" onclick="openTab('wt')">WT Upregulation</button>
+    <button class="tab-btn" onclick="openTab('wt')">WT upregulation</button>
     <button class="tab-btn" onclick="openTab('avec')">AVEC</button>
-    <button class="tab-btn" onclick="openTab('data-processing')">Data Processing</button>
+    <button class="tab-btn" onclick="openTab('data-processing')">Data processing</button>
 </div>
 
 <div id="general" class="tab-pane active">
-    <h4>General</h4>
+    <h2>General</h2>
     <p>Even though a targeted genetic therapy is still lacking for 95% of individuals living with a rare condition, improved genetic diagnosis, together with progress in biotechnology, has already led to a sharp increase in the development and clinical delivery of genetic therapies in the past years. Notably, over 30 personalized genetic therapies have been developed since 2018 that have been delivered to around 100 individuals globally. Yet not all diagnosed individuals are equally suitable for a therapeutic development, and careful evaluation of possible targets is key to therapeutic success. The N=1 Collaborative has recently released the first consensus guideline for the assessment of pathogenic DNA variants towards antisense oligonucleotide therapies (N1C VARIANT Guidelines). Based on the experience of applying the guideline to multiple cohorts, we now present an updated version of the guideline, VARIANT 2.0 (will later include link to pre-print/publication), which includes new sections as well as additional details for the assessment of previously published sections. Since manual assessment is time-consuming and often error-prone, we also introduce the Advanced Variant Eligibility Calculator (AVEC), a semi-automated tool that aids in variant assessment. AVEC assesses variants across the different therapeutic ASO approaches and provides an eligibility assessment for each of these. The tool was tested by a group of experienced and inexperienced assessors</p>
 </div>
 
 <div id="splice" class="tab-pane">
-    <h4>Evaluation of Splicing Effects</h4>
+    <h2>Evaluation of Splicing Effects</h2>
     <p>
-        In this step, assessors will evaluate the effect on splicing of each variant. As explained in the Background, correction of aberrant splicing is an elegant way to restore the reading frame and the physiological splicing pattern. Thus, the first aim should always be to assess whether a splice-switching ASO strategy is applicable. Whenever this is not a possibility, the flowchart in Step 4 will aid in choosing the most suitable section for variant assessment. For the splicing evaluation and correction of aberrant splicing, different considerations have to be made given inheritance patterns and pathomechanism of the genetic variant (described separately at the end of Step 3). Table 3 provides an overview of the classification of variants for eligibility for ASO splice correction.
+        In this step, assessors will evaluate the effect on splicing of each variant. As explained in the Background, correction of aberrant splicing is an elegant way to restore the reading frame and the physiological splicing pattern. Thus, the first aim should always be to assess whether a splice-correction ASO strategy is applicable. Whenever this is not a possibility, the flowchart in Step 4 will aid in choosing the most suitable section for variant assessment. For the splicing evaluation and correction of aberrant splicing, different considerations have to be made given inheritance patterns and pathomechanism of the genetic variant (described separately at the end of Step 3). Table 3 provides an overview of the classification of variants for eligibility for ASO splice correction.
     </p>
 
     <div class="toc-block">
@@ -315,7 +130,7 @@
         We generally distinguish intronic and exonic variants for the splicing assessments.
     </p>
 
-    <h5>Intronic variants</h5>
+    <h3>Intronic variants</h3>
     <p>
         As a rule of thumb, we consider intronic variants that are >-100 bp (upstream of acceptor splice site) or >+50 bp (downstream of donor splice site) away from the nearest canonical splice site as likely eligible, i.e., there should be no negative impact on the canonical splice sites and branchpoint. For variants closer to the canonical splice sites, enough functional evidence should be available on the effect on canonical splicing. Variants within 5 bp of the exon-intron/intron-exon boundary, often referred to as splice-site variants, are considered “not eligible” for splice correction. There are some instances where splice-site variants lead to leaky exon skipping (Dawes et al., 2023; Feng et al., 2022). If functional data shows that the variant is causing leaky exon skipping, meaning that the exon is only skipped in some RNA transcripts, and the canonical splice site is weakened but not destroyed, please refer to the section titled “Considerations for Exon Inclusion” at this step (Step 3) for further information. Note that the variant should also not disturb the branchpoint. The location of the branchpoint can vary and is usually found 18-40 bp upstream from the acceptor splice site, but can also be found anywhere 10-100 bp upstream (i.e., -10 to -100 bp region) (Xie, Wang, & Lin, 2023).
     </p>
@@ -329,7 +144,7 @@
         The design of splice correcting ASOs takes into consideration key splicing motifs. The most amenable variants for splice correction are deep intronic variants, highlighted yellow in this figure. As the canonical splice sites are approached, one must consider the effects of the ASO blocking important splice site motifs (i.e., the branchpoint). These regions are highlighted in black (intronic) or gray (exonic) in this figure. Anything within 5 bp is considered not eligible for targeting with an ASO (highlighted red in this figure, both intronic and exonic), though exceptions apply.
     </p>
 
-    <h5>Exonic variants</h5>
+    <h3>Exonic variants</h3>
     <p>
         For exonic variants, further considerations apply. As for the intronic variants, the exonic variant should be at least 5 bp outside of the canonical splice sites (upstream and downstream - hard cutoff). In some instances, a variant within 5bp of the canonical splice site may lead to leaky exon skipping, where the canonical splice signal is weakened but not destroyed. If functional evidence shows that this is the case, refer to the section titled “Considerations for Exon Inclusion” at this step (Step 3). In cases where the variant is destroying the canonical splice site, leading to full exon skipping, these should be treated the same as a complete exonic deletion. Skipping an adjacent exon to restore the reading frame may be possible. For these cases, refer to Section A (exon skipping). We further define a second cut-off at 15 bp (region 6 to 15 bp upstream or downstream of the canonical splice sites) as a soft cutoff where a splice correction can be considered but is challenging. This cutoff is based on the idea that ASOs can bind to this region without destroying the canonical splice set, yet there is still a possibility of weakening canonical splicing.
     </p>
@@ -360,17 +175,17 @@
         <li>If the amino acid change is known to be benign on protein level, due to population data or functional studies, the variant follows the same considerations as a synonymous variant and can be analyzed using Table 3.</li>
     </ul>
 
-    <h5>UTR Variants</h5>
+    <h3>UTR Variants</h3>
     <p>
         UTR Variants should be assessed in a manner similar to exonic coding variants. If there is functional evidence that a variant in the 5’ or 3’ UTR leads to aberrant splicing, they could be considered for splice correcting ASOs. For example, a 3’ UTR variant in KLHL40 resulted in the creation of a cryptic donor site and was assumed to cause nonsense mediated decay (Dofash et al., 2022). This variant could be treated as an exonic gain-of-splice variant and could be targeted with a splice-correcting ASO.
     </p>
 
-    <h5>Important considerations for different inheritance patterns and pathomechanisms</h5>
+    <h3>Important considerations for different inheritance patterns and pathomechanisms</h3>
     <p>
         For AR disorders, Step 3 applies without restrictions. If the variants are homozygous or compound heterozygous, the Step 3 evaluation has to be done once or twice for both variants. If the disorder is AD associated with a LoF, the Step 3 guidelines also apply. Since the purpose of these ASOs is to restore wildtype splicing, rather than alter splicing, whether the ASO binds the wildtype or pathogenic allele does not matter (unlike with canonical exon skipping ASOs and gapmer ASOs). Similarly, variants that lead to a GoF or DN effect through altering splicing can be assessed with these guidelines (please consider the effect of the variant on protein level once splicing is corrected). For GoF or DN variants, however, one might consider a knockdown approach for a more efficacious effect (see Section B).
     </p>
 
-    <h5>ASO check</h5>
+    <h3>ASO check</h3>
     <p>
         In addition to the recommended assessment strategies, assessors should review the literature for splice correcting ASO strategies. This review can be performed either as the final step to validate the assessment strategy or earlier in the assessment process (see Step 0). Specifically, for splice correcting ASOs, it is crucial to evaluate whether a splice correcting approach has been implemented and validated for the specific variant at the RNA level. Please also consider that the rescue at the RNA level needs to be sufficient to produce enough protein to rescue the phenotype. Ideally, a publication should provide this evidence.
     </p>
@@ -385,7 +200,7 @@
         <br><code>ABCA4 AND ((ASO) OR (AON) OR (antisense oligonucleotide)) AND ((Gln876Ter) OR (c.2626C>T) OR (E876X) OR (Q876X) OR (Gln876*) OR (E876*) OR (Q876*))</code>
     </p>
 
-    <h5>Table 3: Classification of variants for their eligibility towards splice correction</h5>
+    <h3>Table 3: Classification of variants for their eligibility towards splice correction</h3>
     <table class="classification-table">
         <thead>
             <tr>
@@ -445,10 +260,10 @@
         </tbody>
     </table>
 
-    <hr style="margin: 2em 0; border: 0; border-top: 1px solid #ddd;">
+    <hr>
 
-    <h4>Considerations for Exon Inclusion</h4>
-    <h5>Introduction to Exon Inclusion</h5>
+    <h2>Considerations for Exon Inclusion</h2>
+    <h3>Introduction to Exon Inclusion</h3>
     <p>
         As described earlier in Step 3, canonical splice site variants and variants disrupting splice regulatory elements (e.g., Branchpoints, splice enhancers/silencer) are excluded from further assessment for splice correction, and are classified as not eligible. However, in some instances, weakened splice sites leading to exon skipping can be strengthened through blocking a splice silencer signal, meaning silencing the silencer will lead to increased exon inclusion. Exon inclusion is the mechanism behind the most widely used ASO to date, nusinersen, that enhances the inclusion of exon 7 into the SMN2 transcript (NM_017411.4) used to treat patients with spinal muscular atrophy (Hua et al., 2008). This is currently also the only drug in clinical application using this strategy, highlighting the difficulty in achieving sufficient exon inclusion. Further examples of successful pre-clinical exon inclusion have been published for SLC26A4, PAH, and GAA (Feng et al., 2022; Martínez-Pizarro et al., 2024; van der Wal et al., 2017).
     </p>
@@ -457,7 +272,7 @@
         It is not recommended to perform exon inclusion assessment in a routine setting and instead should be performed by assessors skilled in this type of assessment. However, for completeness, we discuss how these assessments are generally performed. Unlike other ASO strategies discussed in these guidelines (splice correction, exon skipping, and knockdown) we do not assess eligibility for these variants here. We do however consider a variant eligible for exon inclusion in cases where an exon inclusion strategy has been published with clear functional data that goes beyond mini- and midi-gene studies, similar to considerations for wildtype upregulation (Section C).
     </p>
 
-    <h5>Availability of Functional Data</h5>
+    <h3>Availability of Functional Data</h3>
     <p>
         To assess a variant for potential exon inclusion, functional data on the missplicing caused by the variant is necessary. There needs to be a clear understanding of the effect of the variant and the different transcripts produced. Preferably, this data is obtained from patient-derived cells. Please note that a mini-/midi-gene assay alone is not sufficient. Furthermore, the level of wildtype splicing needs to be established. Exon inclusion should only be considered for variants that weaken canonical splicing, either by weakening the canonical splice site or branchpoint directly or by disrupting a splice enhancer. Generally, there should still be substantial wildtype splicing present in the mutant transcripts. From the published literature where exon inclusion was shown preclinically, usually at least 20% (and up to 70%) of wildtype transcript was still present in the patients (Feng et al., 2022; Hua et al., 2008; Martínez-Pizarro et al., 2024; van der Wal et al., 2017). We thus recommend to ensure that sufficient levels of wildtype transcript are still produced.
     </p>
@@ -465,7 +280,7 @@
         Fully destroyed canonical splice sites or instances where canonical splicing is fully abolished cannot be rescued with exon inclusion strategies. Our explanations described earlier in this section (Step 3) are still true for these considerations here. These variants are considered “not eligible” for splice correction.
     </p>
 
-    <h5>Exon Inclusion ASO Target Sites</h5>
+    <h3>Exon Inclusion ASO Target Sites</h3>
     <p>
         When the exon skipping is caused by disruption of an exonic splice enhancer, exon inclusion can only be promoted by blocking an exonic or intronic splice silencer working in tandem. Similar considerations apply when exon skipping is caused by a canonical splice site variant. Such counteracting motifs are not always present.
     </p>
@@ -476,9 +291,9 @@
         To summarize, for exon inclusion strategies, splicing data must be available from a patient-derived sample (endogenous splicing) that clearly indicates the levels of wildtype and missplicing. Should a significant amount of wildtype transcript still be present, we recommend reaching out to an expert group to inquire for assessment for exon inclusion strategies, including where to target.
     </p>
 
-    <hr style="margin: 2em 0; border: 0; border-top: 1px solid #ddd;">
+    <hr>
 
-    <h4>Canonical Splice Site Variants and Splice Region Variants</h4>
+    <h2>Canonical Splice Site Variants and Splice Region Variants</h2>
     <p>
         As discussed above, canonical splice site variants and variants in close proximity to the canonical splice sites (with 5 bp) are usually not good candidates for an ASO strategy. The reason being that most often the canonical splicing is disturbed making it hard to correct these effects. Given the high demand for ASO therapies involving these pathogenic variants and the fact that exceptions do apply, we here discuss scenarios in which canonical splice site variants can be considered for an ASO approach. We recommend discussing such an approach with an expert before starting the development.
     </p>
@@ -495,7 +310,7 @@
         A) Full exon skipping can lead to different effects depending on whether the exon is in-frame or out-of-frame. B) In the case of leaky exon skipping, canonical mRNA transcript is still produced. C) In case of cryptic exon splicing due to a canonical splice site variant, the cryptic splice site can be in- frame our out-of-frame with the canonical splice site leading to different effects. D) Partial intron retention can occur when intronic cryptic splice sites are used instead of the canonical splice site that is disrupted. In some cases (E), the full intron is retained. In cases C-E, the effects can also be leaky with some canonical splicing still being present.
     </p>
 
-    <h5>Table 4: Overview of consequences of canonical splice site variants and potential therapeutic strategies</h5>
+    <h3>Table 4: Overview of consequences of canonical splice site variants and potential therapeutic strategies</h3>
     <table class="classification-table">
         <thead>
             <tr>
@@ -533,7 +348,7 @@
 </div>
 
 <div id="skipping" class="tab-pane">
-    <h4>Considerations for Canonical Exon Skipping</h4>
+    <h2>Considerations for Canonical Exon Skipping</h2>
     <p>
         In this section, assessors will be guided on how to assess a variant for eligibility towards canonical exon skipping ASOs. As described in the Background, exon skipping ASOs can be used to skip exons containing pathogenic variants. Variants generally to be considered for exon skipping are nonsense and frameshift variants causing a LoF in AR, AD, X-linked and Y-linked disorders (additional considerations apply in dominantly inherited diseases, see “Important considerations for different inheritance patterns and pathomechanisms” at the end of this section). GoF and DN negative variants can also be amenable for an exon skipping approach under certain circumstances as well as whole exon deletions (see “Important considerations for different inheritance patterns and pathomechanisms” in this section). While splicing assessments are based on the variant, evaluating the potential for exon skipping are based on the exon, thus an exon skipping approach is applicable to all variants within that exon. For an exon to be skippable, different criteria need to be met.
     </p>
@@ -556,7 +371,7 @@
         The first and last coding exons (exons 2 and 10) cannot be skipped, in addition to out-of-frame exons (exons 3,4,7,9, shown by the shape of the exons). In-frame exons encoding for more than 10% of the coding region (exon 5) and exons coding for functional domains (exon 8) are unlikely eligible for exon skipping. Likely eligible for exon skipping are small, in-frame exons that do not code for a domain (e.g., exon 6). White: exon not considered for canonical exon skipping, e.g., exons in the UTRs, grey: exons not eligible for skipping, blue: exons unlikely eligible for exon skipping, green: exon likely eligible for exon skipping, orange: functional domain.
     </p>
 
-    <h5>Assessing Exon Position and Frame</h5>
+    <h3>Assessing Exon Position and Frame</h3>
     <p>
         The first and last coding exons are usually not eligible for exon skipping as this would lead to the loss of the start or stop codon. Note, due to untranslated regions (UTRs) the first and last exons of a transcript are not necessarily coding exons and, thus, assessors should be aware of which exons contain the canonical start and stop codons (Aspden, Wallace, & Whiffin, 2023). Additionally, genes containing exactly one coding exon are not eligible and are disqualified from further analysis. Next, assessors should evaluate the length and position/frame of the exon. Out-of-frame exons (containing a number of base pairs not divisible by 3) should be classified as “not eligible” in the case of LoF variants where restoration of the reading frame is the aim. Assessors can use tools such as the UCSC Genome Browser, ExonViz (van den Berg, Lauffer, & Laros, 2024), or Ensembl to determine whether the exon is in-frame or out-of-frame and whether the exon is coding or non-coding.
     </p>
@@ -589,7 +404,7 @@
         <li>It is theoretically possible to skip the first coding exon if a nearby in-frame start codon exists, and the first exon meets exon skipping criteria outlined in Table 5</li>
     </ul>
 
-    <h5>Assessing Exon Size</h5>
+    <h3>Assessing Exon Size</h3>
     <p>
         Assessors should consider the size of the exon. As per ClinGen recommendations, an in-frame deletion in the size of 10% or more of the coding transcript is considered a strong criterion for loss of protein function (Walker et al., 2023). However, this is protein and exon-dependent (i.e., losing up to 30% of the dystrophin transcript can still result in a functional, truncated protein (Duan, 2016; Gao & McNally, 2015)). For this reason, skipping an exon that encodes for more than 10% of the protein is considered “unlikely eligible”, and obtaining functional evidence is the expected next step.
     </p>
@@ -616,7 +431,7 @@
         To further refine exon eligibility toward skipping, assessors can also use the recently developed VulExMap webtool, which classifies exons as either resilient or vulnerable to aberrant splicing as a result of mutations (Holm et al., 2024). Vulnerable exons, associated with less enforced inclusion and sensitivity to splicing perturbations, may be more amenable to ASO-mediated skipping, whereas resilient exons are robustly included in transcripts and may be more difficult to skip.
     </p>
 
-    <h5>Searching for Cases of (Natural) Occurrences of Exon Skipping or In-frame Deletions</h5>
+    <h3>Searching for Cases of (Natural) Occurrences of Exon Skipping or In-frame Deletions</h3>
     <p>
         Assessors should determine whether exon skipping has already been observed naturally. This information is necessary to further determine whether exon skipping is a suitable option for a given variant. There are different ways in which exon skipping can occur naturally and resources such as ClinVar, gnomAD, DECIPHER, ExonSkipDB, and PubMed aid with their identification:
     </p>
@@ -643,7 +458,7 @@
         <li>Not eligible - Loss of the exon or larger parts of the exon have been classified as pathogenic</li>
     </ul>
 
-    <h5>Assessing the Role of Functional Domains</h5>
+    <h3>Assessing the Role of Functional Domains</h3>
     <p>
         Assessors should also consider the functionality for which the exon codes. To begin, assessors should identify which domains are coded by the exon using tools such as the UCSC Genome Browser. Please cross-check domain annotations with UniProt or other sources to ensure the correct protein isoform is tagged. In this regard, we consider all types of domains as domains, including transmembrane and cytoplasmic domains as well as disordered regions. At this point, we do not have enough information and data to distill which domains can be removed without negative impact, yet, there are certain types of domains for which we can assume they are more important than others and of such high importance that skipping is not an option. Assessors can search for the role of the amino acids or domains present in an exon in the literature using PubMed, or utilize databases such as the Protein Database (PDB) or UniProt. Assessors should pay attention to the role of these specific domains (i.e., DNA binding domain, catalytic domains) or amino acids (i.e., specific amino acids known to play an important role in enzyme activity or protein structure). Sometimes, a web-search with “[protein name] protein structure” will also yield the desired results.
     </p>
@@ -672,7 +487,7 @@
         If the exon codes for less than 10% of the protein, and no functional domain or important amino acids are coded for by the exon and the exon fulfills other criteria listed in Section A, then the exon can be considered as “likely eligible”. Exons are classified using the criteria outlined in Table 5.
     </p>
 
-    <h5>Special considerations for missense variants and small in-frame indels</h5>
+    <h3>Special considerations for missense variants and small in-frame indels</h3>
     <p>
         If a missense variant or small, in-frame indel leads to a LoF on the protein level, additional caution is necessary. These types of variants often indicate that the exon has a specific function even though no domain might yet be annotated. This could be that the respective amino acids are crucial for folding or the function of a certain domain has not yet been established. In these cases, we recommend paying special attention to other reported pathogenic variants within the exon. Should there be more pathogenic missense variants and in-frame indels than truncating variants, we consider this exon “unlikely eligible” for exon skipping.
     </p>
@@ -680,7 +495,7 @@
         However, for missense variants within protein tandem repeat domains, we refer to the criteria outlined in the tandem repeat domain section above as this is an exception to this recommendation.
     </p>
 
-    <h5>Notes on multi-exon skipping</h5>
+    <h3>Notes on multi-exon skipping</h3>
     <p>
         Double- and multi-exon skipping have been suggested as approaches to bypass deleterious variants in out-of-frame exons when skipping adjacent exon(s) maintains the open reading frame. While this has been explored in preclinical studies, such as when targeting truncating variants in DMD exon 43 via 43-44 skipping (Aartsma-Rus et al., 2004), we currently do not recommend such an approach for clinical practice as it often requires the use of multiple ASOs.
     </p>
@@ -688,7 +503,7 @@
         However, restoration of the reading frame in case of deletion of one or more out-of-frame exons can be achieved via skipping of a second out-of-frame exon that is adjacent to or downstream from a disease-causing exon deletion. If considering such an approach, criteria on exon size of the skipped area (including deleted + skipped exons), functional domains, and presence of missense variants/small in-frame indels still apply. In addition to this criteria, assessors should also consider utilizing tools such as GTGT, ExonViz, and the UCSC Genome Browser to identify instances where double- and multi-exon skipping produces an in-frame transcript. Assessors can also search for existing cases of double- or multi-exon deletions in the target region that are associated with mild to asymptomatic phenotypes as rationale for such an approach.
     </p>
 
-    <h5>Important considerations for different inheritance patterns and pathomechanisms</h5>
+    <h3>Important considerations for different inheritance patterns and pathomechanisms</h3>
     <p>
         The recommendations described above apply without restrictions to LoF variants in recessive disorders. For LoF variants in AD disorders, one might consider the development of allele-selectivespecific ASOs. This will ensure that exon skipping does not occur on the wildtype transcript and may result in greater amounts of functional gene product compared to non-allele selectivespecific ASOs. Though specific ASO design is beyond the scope of these guidelines, this may prove challenging and limit the types of ASOs to be designed.
     </p>
@@ -702,7 +517,7 @@
         For GoF variants, additional considerations are possible. The guidelines for exon skipping can be applied as they are, with the exception that toxic GoF caused by the disruption of an inhibitory domain will not be rescued by skipping the exon containing the inhibitory domain (Mohassel et al., 2021). For GoF variants also an out-of-frame exon can be skipped, either the one containing the variant or any other one to downregulate transcript levels. In such a cases, haploinsufficiency of the gene should be taken into account which might require allele-selective approaches. Generally, for the downregulation of a transcript in the case of GoF and DN variants, Section B can be consulted. We do not recommend skipping out-of-frame exons for DN variants unless the WT allele remains intact (allele-selective skipping). For DN variants, it is important that the ration of WT to mutant allele needs to be shifted towards more WT allele.
     </p>
 
-    <h5>ASO check</h5>
+    <h3>ASO check</h3>
     <p>
         In addition to the recommended assessment strategies, assessors should review the literature or registries for exon skipping ASO strategies. This review can be performed either as the final step to validate your assessment strategy or earlier in the assessment process (see Step 0). Specifically, for exon skipping ASOs, it is crucial to evaluate whether an exon skipping approach has been implemented and validated at both the RNA and protein levels and shown to have the desired effect on the phenotype.
     </p>
@@ -717,7 +532,7 @@
         <br><code>ABCA4 AND ((ASO) OR (AON) OR (antisense oligonucleotide)) AND (Exon 17)</code>
     </p>
 
-    <h5>Table 5: Classification of variants for their eligibility towards exon skipping.</h5>
+    <h3>Table 5: Classification of variants for their eligibility towards exon skipping.</h3>
     <table class="classification-table">
         <thead>
             <tr>
@@ -779,7 +594,7 @@
 </div>
 
 <div id="knockdown" class="tab-pane">
-    <h4>Considerations for Transcript Knockdown</h4>
+    <h2>Considerations for Transcript Knockdown</h2>
     <p>
         In this section, assessors will be guided on how to assess a variant for eligibility towards knockdown approaches. As described in the Background, knockdown ASOs/siRNAs can bind to the target transcript and downregulate (pre-)mRNA expression. Knockdown strategies can be utilized in cases where the pathomechanism is a result of overexpression, toxic GoF, or DN effects (Lauffer, van Roon-Mom, Aartsma-Rus, & N = 1 Collaborative, 2024).
     </p>
@@ -797,12 +612,12 @@
         </ul>
     </div>
 
-    <h5>Considerations for Pathomechanisms</h5>
+    <h3>Considerations for Pathomechanisms</h3>
     <p>
         Variants to be considered for knockdown approaches using gapmer ASOs or siRNA are toxic GoF and DN variants and copy number gains. Strategies on how to assess a variant mechanism are discussed in Step 2. Please ensure you have sufficient evidence of GoF or DN pathomechanism before proceeding further.
     </p>
 
-    <h5>Considerations for Dosage Sensitivity</h5>
+    <h3>Considerations for Dosage Sensitivity</h3>
     <p>
         Before proceeding with the development of a knockdown ASO, it is crucial to consider dosage sensitivity. Ideally, a knockdown strategy would be employed when loss-of-function is not expected to cause disease. However, such cases are rare. More commonly, alterations in gene dosage are an underlying cause of disease and must be considered when developing knockdown ASOs. Here it becomes important to be aware of the different inheritance patterns that are implicated in a gene.
     </p>
@@ -825,7 +640,7 @@
         Another scenario in which allele-selectivespecific ASOs should be considered is if the mechanism is dominant-negative. DN variants impact the wildtype product and therefore may result in a functional product loss of greater than 50%. Hence, it is critical that an ASO is designed to specifically target the DN allele while keeping the wildtype product intact to recapitulate as much function as possible. For this reason, we recommend that, in the specific case of DN variants, that a variant can only be considered as likely eligible for a knockdown ASO only when an allele-selectivespecific approach can be taken.
     </p>
 
-    <h5>Important considerations for different inheritance patterns</h5>
+    <h3>Important considerations for different inheritance patterns</h3>
     <p>
         In the case of X-linked and Y-linked disorders, further considerations are necessary. For males, downregulation of a gene on the X or Y chromosome can lead to a complete loss of the gene function and before embarking on such an approach it should be known that this complete loss is tolerated. For X-linked disorders in females, it should be considered how X inactivation (discussed in Step 1) will affect gene dosage and whether a knockdown approach is safe. When considering a knockdown ASO, it is necessary to know whether the gene of interest escapes XCI or might reflect skewed XCI. Each of these situations will result in a different gene dosage, and therefore a different level of maximum expression to reduce.
     </p>
@@ -833,7 +648,7 @@
         One X-linked case example is CLCN4-related condition, an XLD disease caused by a single pathogenic variant in the CLCN4 gene (Palmer, E. E. et al., 2018). It affects males and females differently depending on the pathomechanism (Palmer, Elizabeth Emma et al., 1993). LoF variants do no harm in females, but cause the disease in males. On the other hand, DN variants cause disease in females. This means that half the gene dose is sufficient, but anything less is not. An allele-selectivespecific knockdown ASO would therefore be required for DN variants in this gene for females only.
     </p>
 
-    <h5>ASO Check</h5>
+    <h3>ASO Check</h3>
     <p>
         In addition to the recommended assessment strategies, assessors should review the literature for knockdown ASO/siRNA strategies. This review can be performed either as the final step to validate the assessment strategy or earlier in the assessment process (see Step 0). Specifically, for knockdown ASOs, it is crucial to evaluate whether a knockdown approach has been developed for other DN or GoF variants in the same gene, and that this approach has been validated at the RNA and protein level and shown to rescue the phenotype (pre-clinical work is sufficient). Take note if an allele-selectivespecific approach was used, as this may limit ASO design and affect outcomes. Further, an ASO might have been developed that is specific for a variant (other than the one under assessment) or a SNP. Information on phasing of an individual’s variant with that SNP will then have to be obtained. The gene is still “eligible” for knockdown according to the criteria outlined in Table 6 even if the already available ASO is not suitable for the individual under assessment. This means a new ASO would have to be designed and developed for that individual.
     </p>
@@ -852,7 +667,7 @@
         Variants, where not enough evidence exists on the pathomechanism or the dosage sensitivity cannot be assessed until more evidence is collected.
     </p>
 
-    <h5>Table 6: Classification of variants for their eligibility towards knockdown</h5>
+    <h3>Table 6: Classification of variants for their eligibility towards knockdown</h3>
     <table class="classification-table">
         <thead>
             <tr>
@@ -900,7 +715,7 @@
 </div>
 
 <div id="wt" class="tab-pane">
-    <h4>Considerations for Upregulation from the Wildtype Allele</h4>
+    <h2>Considerations for Upregulation from the Wildtype Allele</h2>
     <p>
         For disorders caused by haploinsufficiency, one functional wildtype gene copy remains. In these situations, one can use ASOs to upregulate the wildtype allele. This approach, also known as targeted augmentation of nuclear gene output (TANGO) (Lim et al., 2020), can include skipping of poison exons, downregulating naturally occurring antisense transcripts, and targeting UTR regulator elements such as upstream open reading frames, all of which can increase the gene product. For a more detailed explanation of these approaches, see the Background, and the following publications:
     </p>
@@ -929,7 +744,7 @@
         </ul>
     </div>
 
-    <h5>Naturally Occurring Antisense Transcripts</h5>
+    <h3>Naturally Occurring Antisense Transcripts</h3>
     <p>
         Through downregulating naturally occurring antisense transcripts via gapmer ASOs, it is - in some instances - possible to upregulate gene expression (e.g.Dindot et al., 2023)). Assessors can utilize resources such as PubMed, UCSC Genome Browser, HUGO Gene Nomenclature Committee, and Ensembl to search for known antisense transcripts for a given gene. If searching through a genome browser like UCSC, naturally occurring antisense transcripts would be found to run in the reverse direction on the complementcompliment strand, and would be noted as a non-coding RNA. It is important to verify that this transcript is indeed a non-coding antisense transcript, and not another protein coding gene. Not all complimentary transcripts are NATs. To verify, we suggest utilizing databases such HUGO, paying attention to alias names or symbols that may indicate itsit’s function as a non-coding antisense transcript (i.e. “AS”, “antisense”, etc.). Please also note that antisense transcripts can be located in different positions in respect to the sense transcript, which will influence whether they are good targets. To learn more about antisense transcripts and their directions, we recommend to further study Werner et al. 2024 and Zinad et al 2017.
     </p>
@@ -937,7 +752,7 @@
         Assessors should also consider the level at which these antisense transcripts are expressed in the tissue of interest. Databases such as GTEx and the Human Protein Atlas can assist with this. No general threshold of expression level can be provided, as this is gene dependent. However, assessors should pay attention to which tissues the transcript is enriched in, and how expression levels compare to the gene we wish to upregulate. Note that the existence of an antisense transcripts alone is not enough to consider an ASO development. Factors such as tissue expression, regulatory function, and orientations of the antisense transcripts (see above) must be well understood before considering this approach. For this reason, we highly encourage a literature search through PubMed to supplement the above assessment. Functional evidence must be available, describing the role of the transcript as a downregulator of the gene of interest. Search terms can include the name of the gene of interest, followed by the term “antisense transcript”, or the official name of the antisense transcript or host gene itself.
     </p>
 
-    <h5>Upstream Open Reading Frames</h5>
+    <h3>Upstream Open Reading Frames</h3>
     <p>
         Targetting uORFs for upregulation of the WT allele can be approached in two different ways. One option is that an ASO can be designed to target and block the regulatory elements in untranslated regions, including uORFs. Resources such as PubMed can be used to check whether there is a uORF that can be targeted in the relevant transcript. Additionally, the supplemental table 2 in the paper by Mittal et al. (2022) indicates for which genes uORFs have been identified. Note that not all uORFs act through an inhibitory mechanism, and proper characterization of their mechanism is essential in determining their eligibility as ASO targets. To collect this information, we recommend a review of the literature and eventually, functional studies. The uORF should also be present in relevant and highly expressed transcripts in the target tissue.
     </p>
@@ -956,20 +771,20 @@
         ASO can be used to skip untranslated exons containing start sites of the upstream open reading frame (uORF), promoting translation of the primary open reading frame (pORF), increasing wildtype gene product.
     </p>
 
-    <h5>Poison Exons and Non-Productive Alternate Splicing Events</h5>
+    <h3>Poison Exons and Non-Productive Alternate Splicing Events</h3>
     <p>
-        One can design ASOs which target non-productive alternate splicing events including poison exons. These ASOs would utilize the splice-switching approaches described in the splice-correction and exon skipping sections to promote canonical splicing of the wildtype transcript. Resources such as PubMed, Ensembl, VastDB, and the UCSC Genome Browser can aid in determining alternate splicing events in the transcript of interest. Additionally, supplemental table 2 from Mittal et al. (2022), supplemental data 2 from Lim et al. (2020), and supplemental data 1 from Felker et al. (2023) list all identified poison exons in these papers. Databases such as GTEx can further assist by determining the expression level of alternate transcripts in the target tissue. As noted earlier, no specific threshold is available when reviewing transcript issue, as this will differ by gene and disease considerations. Note that some alternate splicing events are crucial for the production of important transcripts and isoforms. Generally, skipping a poison exon should lead to increased WT levels high enough to alter the disease state. The most prominent example of poison exon skipping in SCN1A for Dravet syndrome was possible because up to 80% of the transcripts contain this poison exon (Tang et al., 2025).
+        One can design ASOs which target non-productive alternate splicing events including poison exons. These ASOs would utilize the splice-correction approaches described in the splice-correction and exon skipping sections to promote canonical splicing of the wildtype transcript. Resources such as PubMed, Ensembl, VastDB, and the UCSC Genome Browser can aid in determining alternate splicing events in the transcript of interest. Additionally, supplemental table 2 from Mittal et al. (2022), supplemental data 2 from Lim et al. (2020), and supplemental data 1 from Felker et al. (2023) list all identified poison exons in these papers. Databases such as GTEx can further assist by determining the expression level of alternate transcripts in the target tissue. As noted earlier, no specific threshold is available when reviewing transcript issue, as this will differ by gene and disease considerations. Note that some alternate splicing events are crucial for the production of important transcripts and isoforms. Generally, skipping a poison exon should lead to increased WT levels high enough to alter the disease state. The most prominent example of poison exon skipping in SCN1A for Dravet syndrome was possible because up to 80% of the transcripts contain this poison exon (Tang et al., 2025).
     </p>
     <p>
         For more resources and strategies on upregulating wildtype gene products, please reference the Useful Tools section.
     </p>
 
-    <h5>Important considerations for different inheritance patterns and pathomechanisms</h5>
+    <h3>Important considerations for different inheritance patterns and pathomechanisms</h3>
     <p>
         The considerations outlined here are mainly applicable to diseases associated with haploinsufficiency, which is most likely caused by LoF variants in AD disorders. In rare cases, one could also consider applying upregulation of wildtype allele strategies in X-linked disorders in females where there is sufficient evidence that upregulation from the second X chromosome is possible. Please always consider the challenges caused due to X inactivation.
     </p>
 
-    <h5>ASO Check</h5>
+    <h3>ASO Check</h3>
     <p>
         Also for the upregulation of wildtype allele approaches, one can search whether specific strategies already exist, are under development, or are pursued in clinical trials. Multiple strategies can be utilized to upregulate gene products from the wildtype transcript, and it is therefore important to employ a variety of strategies/approaches in the search terms to ensure a comprehensive review of the field.
     </p>
@@ -979,54 +794,56 @@
 </div>
 
 <div id="avec" class="tab-pane">
-    <h4>AVEC</h4>
+    <h2>AVEC</h2>
     <p>AVEC follows the logic outlined in the VARIANT 2.0 guideline (will include link to pre-print / publication later). AVEC draws upon ClinGen to derive the mode of inheritance. The user needs to input the pathomechanism of the variant for pathomechanism-dependent assessment. Gain-of-function and dominant-negative variants are assessed for knockdown. Monoallelic loss-of-function variants are assessed for wildtype-upregulation. Intronic variants are solely assessed for splice correction unless additional pathomechanism information is provided.</p>
     <p>All input variants are compared to the N1C Gene Registry to assess for existing therapies and already assessed variants. The N1C Gene Registry is a publicly available resource providing information on available marketed genetic therapies, available N=1 therapies, therapies under development and variants previously assessed for ASO eligibility.</p>
     <p>The code underlying AVEC is openly available. AVEC can be accessed for free here: <a href="https://avec.uni-koeln.de" target="_blank">avec.uni-koeln.de</a>.</p>
 
-    <h5>Literature search</h5>
+    <h3>Literature search</h3>
     <p>To accelerate literature search, AVEC automatically searches for existing ASO therapies, pathomechanism, and splicing effects on PubMed.</p>
 
-    <h5>Splice correction</h5>
+    <h3>Splice correction</h3>
     <p>For splice correction, the variant is compared to SpliceVarDB, and SSCVDB - both are databases of splice-altering variants. Only RNA-seq and qPCR methods are accepted as experimental validation of splice altering effects. If no evidence is found, the user can manually input that splice-altering effects have been validated with qPCR or RNA-seq. Otherwise, the variant is categorized as ‘unable to assess’. All variants are assessed based on distance to the canonical splice site.</p>
 
-    <h5>Exon skipping</h5>
+    <h3>Exon skipping</h3>
     <p>Exonic variants are always assessed for exon skipping, initially of a single exon. If the exon harboring the variant is out of frame, the variant is assessed for double-exon skipping using the adjacent (upstream and downstream) exons.</p>
-    <p>For exon skipping assessment, AVEC relies heavily on the Ensembl REST API with Hg38 as the reference genome. The HGVS variant is processed via VEP and uses the coordinates to map it to the MANE select or Ensembl canonical transcript. For functional domain annotation, the genomic exon coordinates are compared to the databases CDD, Pfam, SMART, PROSITE profiles, PROSITE patterns SUPERFAMILY, PRINTS, and ProDom. The functional domains are reduced to unique Interpro annotations to avoid multiple annotation of the same domain. Exon length, coding sequence length and stop codon creation upon skipping is assessed based on the Ensembl REST API for the MANE select or, if unavailable, the Ensembl canonical transcript. The clinical significance of other variants inside the exon is gathered via Ensembl VEP. If there is a high amount of pathogenic missense variants inside the exon, the variant is assessed as ‘unlikely eligible’ following the guidelines description on mutational hotspots. We define a high amount of pathogenic missense variants as: amount of pathogenic missense variants &gt; amount of pathogenic nonsense and frameshift variants + 3. Possible evidence for pathogenic effects of exon skipping is gathered through splice donor/acceptor variants categorized as “pathogenic” or “likely pathogenic” on VEP. If pathogenic splice site variants are found, assessment is not changed until the user manually verifies exon skipping as a consequence of the variant. Functional evidence that in-frame deletions are pathogenic is gathered for in-frame deletion variant categorized as “pathogenic” or “likely pathogenic” on VEP. Variant eligibility towards exon skipping is assessed according to version 2.0 of the N1C VARIANT guidelines. Briefly, an exon is classified as “eligible”, “likely eligible”, “unlikely eligible” or “not eligible” based on evidence that exon skipping does not impair protein function, the basepair-length of the exon, possible codon changes, functional domains, exon size relative to the coding region, and the effect of other variants inside the exon.</p>
+    <p>For exon skipping assessment, AVEC relies heavily on the Ensembl REST API with Hg38 as the reference genome. The HGVS variant is processed via VEP and uses the coordinates to map it to the MANE select or Ensembl canonical transcript. For functional domain annotation, the genomic exon coordinates are compared to the databases CDD, Pfam, SMART, PROSITE profiles, PROSITE patterns SUPERFAMILY, PRINTS, and ProDom. The functional domains are reduced to unique Interpro annotations to avoid multiple annotation of the same domain. Tandem repeat domains annotated in TReXome DB that overlap the exon are counted as functional domains as well. Alongside AVEC's own classification, the exon-skipping result reports HAWK-EYE's independent dispensability assessment for the same exon, together with the antisense oligonucleotides HAWK-EYE has designed against it, which can be downloaded as a CSV file. HAWK-EYE assesses exons of MANE Select RefSeq transcripts, so its record is looked up by the exon's GRCh38 coordinates rather than by exon number, and it is reported for information only: it does not feed into AVEC's own classification.
+ Exon length, coding sequence length and stop codon creation upon skipping is assessed based on the Ensembl REST API for the MANE select or, if unavailable, the Ensembl canonical transcript. The clinical significance of other variants inside the exon is gathered via Ensembl VEP. If there is a high amount of pathogenic missense variants inside the exon, the variant is assessed as ‘unlikely eligible’ following the guidelines description on mutational hotspots. We define a high amount of pathogenic missense variants as: amount of pathogenic missense variants &gt; amount of pathogenic nonsense and frameshift variants + 3. Possible evidence for pathogenic effects of exon skipping is gathered through splice donor/acceptor variants categorized as “pathogenic” or “likely pathogenic” on VEP. If pathogenic splice site variants are found, assessment is not changed until the user manually verifies exon skipping as a consequence of the variant. Functional evidence that in-frame deletions are pathogenic is gathered for in-frame deletion variant categorized as “pathogenic” or “likely pathogenic” on VEP. Variant eligibility towards exon skipping is assessed according to version 2.0 of the N1C VARIANT guidelines. Briefly, an exon is classified as “eligible”, “likely eligible”, “unlikely eligible” or “not eligible” based on evidence that exon skipping does not impair protein function, the basepair-length of the exon, possible codon changes, functional domains, exon size relative to the coding region, and the effect of other variants inside the exon.</p>
 
-    <h5>Knockdown</h5>
+    <h3>Knockdown</h3>
     <p>If the variant is specified as gain-of-function or dominant negative, it is assessed for knockdown strategies. For dominant negative variants, AVEC warns users that ASO-mediated knockdown must be allele-specific to ensure the continued expression of the wildtype allele. If the target gene is also associated with dominantly inherited loss-of-function variants or there is sufficient evidence for haploinsufficiency, the variant is ranked “not eligible”, because knockdown might be harmful. Haploinsufficiency and mode of inheritance are derived from ClinGen. If the gene is haplosufficient, the variant is ranked as “likely eligible”.</p>
 
-    <h5>Wildtype upregulation</h5>
+    <h3>Wildtype upregulation</h3>
     <p>If the variant is located on a gene specified as autosomal dominant loss-of-function, the variant is assessed for wildtype-upregulation. The assessment is done by looking for upstream open reading frames (uORFs), natural antisense transcripts or poison exons. As this can be considered a basic, initial assessment of potential therapeutic options, differing from the more definitive assessments of other approaches and requiring further, more in-depth evaluations, variants are categorized as ‘potential possibilities identified’ or ‘no potential possibilities identified’.</p>
 
-    <h5>Overrides</h5>
+    <h3>Overrides</h3>
     <p>If the user has information necessary for variant assessment not available in the databases underlying AVEC, they are able to modify the initial assessment by AVEC by simply clicking on the respective ‘guideline check’ and ‘commit manual overrides’. This will lead to a new assessment based on the user input. Changes to the original assessment will be marked in bold.</p>
 
 </div>
 
 <div id="data-processing" class="tab-pane">
-    <h4>Data processing &amp; third-party services</h4>
+    <h2>Data processing &amp; third-party services</h2>
     <p>AVEC is operated by the University of Cologne. Information on the controller, your rights and the data protection officer is given in the <a href="https://uni-koeln.de/en/privacy-protection-statement" target="_blank" rel="noopener noreferrer">University of Cologne privacy statement</a> (<a href="https://uni-koeln.de/datenschutz" target="_blank" rel="noopener noreferrer" lang="de">Datenschutzerklärung</a>). Technical access data (e.g. IP address, time of access) is processed by the web server as described there.</p>
 
-    <h5>Assessment on the AVEC server</h5>
+    <h3>Assessment on the AVEC server</h3>
     <p>AVEC does not store queries, results, selections, overrides or commentary on the server. To assess a variant, the server queries the following public services:</p>
     <ul>
         <li><strong>Ensembl</strong> (EMBL-EBI): the entered variant (via VEP), gene symbols, transcript IDs and genomic regions.</li>
         <li><strong>NCBI E-utilities</strong> (ClinVar): the genomic regions of the assessed exons.</li>
         <li><strong>NCBI LitVar2</strong>: the variant's dbSNP identifier (rsID), if one exists.</li>
         <li><strong>TReXome DB</strong>: the gene symbol.</li>
+        <li><strong>HAWK-EYE</strong> (The Hospital for Sick Children, Toronto): the gene symbol and the genomic coordinates of the assessed exon.</li>
         <li><strong>N1C Gene Registry</strong>: the server periodically downloads the registry tables; no query data is sent.</li>
     </ul>
     <p>Public reference data returned by these services (e.g. Ensembl annotations for a variant, gene or transcript) is cached in server memory for up to 24 hours to speed up repeated assessments. It is never written to disk.</p>
 
-    <h5>In your browser</h5>
+    <h3>In your browser</h3>
     <ul>
         <li>The tool page loads the IGV genome browser library from <strong>jsDelivr</strong> (cdn.jsdelivr.net) and hg38 reference data from IGV's public genome servers.</li>
         <li>When results are displayed, the literature search is sent directly from your browser to <strong>NCBI PubMed</strong> (E-utilities), using the search terms shown on the page.</li>
-        <li>These services receive your IP address when they are contacted. Other external sites (e.g. ClinGen, Orphanet, ClinVar, Varaico, LitVar2) are only contacted when you follow a link.</li>
+        <li>These services receive your IP address when they are contacted. Other external sites (e.g. ClinGen, Orphanet, ClinVar, Varaico, LitVar2, HAWK-EYE) are only contacted when you follow a link.</li>
         <li>The last query, results, selections and commentary are kept in your browser's session storage so the page can be restored on reload; they are deleted when the tab is closed. Local storage holds only your light/dark theme choice. AVEC uses no cookies and no analytics or tracking.</li>
-        <li>Downloaded reports are generated locally in your browser.</li>
+        <li>Downloaded reports and ASO candidate lists are generated locally in your browser.</li>
     </ul>
     <p>Please enter variant descriptions only, and do not enter names or other data identifying patients.</p>
 </div>
@@ -1066,9 +883,18 @@
         if (pane && pane.classList.contains('tab-pane')) openTab(tabId);
     });
 </script>
-        <p class="disclaimer">Disclaimer: This tool does not serve as Medical Advice. Although the content of these webpages may partly be provided by individuals in the medical profession, you acknowledge that provision of such content does not create a medical professional-patient relationship and does not constitute an opinion, medical advice, professional diagnosis, service or treatment of any condition. The access to general information is provided for educational purposes only, through this site and links to other sites. The content is not recommended or endorsed by any doctor or healthcare provider. The information and content provided are not substitutes for medical or professional care, and the information is not to be used in place of a visit, call, consultation or the advice of your physician or other healthcare provider. We are not liable or responsible for any advice, course of treatment, diagnosis or any other information, services or product obtained through this site.</p>
-        <p class="disclaimer" style="margin-top:.5em; border-top:none; padding-top:0;"><a href="https://uni-koeln.de/en/site-notice" target="_blank" rel="noopener noreferrer">Site notice</a> (<a href="https://uni-koeln.de/impressum" target="_blank" rel="noopener noreferrer" lang="de">Impressum</a>) &middot; <a href="https://uni-koeln.de/en/privacy-protection-statement" target="_blank" rel="noopener noreferrer">Privacy</a> (<a href="https://uni-koeln.de/datenschutz" target="_blank" rel="noopener noreferrer" lang="de">Datenschutz</a>) &middot; <a href="/about#data-processing">Data processing &amp; third-party services</a></p>
+        
     </main>
+
+    <footer class="site-footer">
+        <div class="site-footer__inner">
+            <p class="site-footer__links">
+                <span><a href="https://uni-koeln.de/en/site-notice" target="_blank" rel="noopener noreferrer">Site notice</a> (<a href="https://uni-koeln.de/impressum" target="_blank" rel="noopener noreferrer" lang="de">Impressum</a>)</span>
+                <span><a href="https://uni-koeln.de/en/privacy-protection-statement" target="_blank" rel="noopener noreferrer">Privacy</a> (<a href="https://uni-koeln.de/datenschutz" target="_blank" rel="noopener noreferrer" lang="de">Datenschutz</a>)</span>
+                <a href="/about#data-processing">Data processing &amp; third-party services</a>
+            </p>
+            <p class="disclaimer">Disclaimer: This tool does not serve as Medical Advice. Although the content of these webpages may partly be provided by individuals in the medical profession, you acknowledge that provision of such content does not create a medical professional-patient relationship and does not constitute an opinion, medical advice, professional diagnosis, service or treatment of any condition. The access to general information is provided for educational purposes only, through this site and links to other sites. The content is not recommended or endorsed by any doctor or healthcare provider. The information and content provided are not substitutes for medical or professional care, and the information is not to be used in place of a visit, call, consultation or the advice of your physician or other healthcare provider. We are not liable or responsible for any advice, course of treatment, diagnosis or any other information, services or product obtained through this site.</p>
+        </div>
+    </footer>
 </body>
 </html>
-    

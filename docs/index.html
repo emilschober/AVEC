@@ -8,7 +8,7 @@
     <link rel="icon" href="/static/favicon.ico">
     <link rel="preload" href="/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="/fonts/atkinson-hyperlegible-mono-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/static/avec.css?v=12">
+    <link rel="stylesheet" href="/static/avec.css?v=13">
 </head>
 <body>
     <script src="/static/avec.js?v=8"></script>
@@ -189,7 +189,8 @@
 
             <div class="notice">
                 <p class="notice__lead">We strongly recommend searching for existing ASOs before you assess.</p>
-                <p>Results depend on external databases and services and may be incomplete or unavailable. AVEC does not replace clinical judgement or a physician.</p>
+                <p>Results depend on external databases and services and may be incomplete or unavailable. AVEC does not replace clinical judgement or a physician.
+                AVEC only works reliably for variants that are smaller than one exon, otherwise variant mapping might fail or will be incorrect.</p>
                 <p class="notice__small">Enter variant descriptions only, never names or other data that can identify a patient.</p>
             </div>
         </section>
@@ -547,7 +548,7 @@ document.addEventListener('visibilitychange', () => {
 // Progress: what the server reports it is doing, as a log and an exon track
 // ======================================================================
 // Order of the backend's progress steps (see _progress calls in avec.py)
-const STEP_ORDER = ['request', 'vep', 'gene', 'literature', 'n1c', 'gene_strategies', 'splice', 'exons', 'n1c_exons', 'cds', 'clinvar', 'domains', 'trexome', 'exon_pairs', 'trexome_gene', 'alternate'];
+const STEP_ORDER = ['request', 'vep', 'gene', 'literature', 'n1c', 'gene_strategies', 'splice', 'exons', 'n1c_exons', 'cds', 'clinvar', 'domains', 'trexome', 'hawkeye', 'exon_pairs', 'trexome_gene', 'alternate'];
 const EXON_WIDTHS = [3, 6, 2, 4, 7, 3, 5, 2, 4, 6];
 
 const progress = (() => {
@@ -704,7 +705,8 @@ window.userExonicPathogenic = null;  // 'yes' | 'no' | null
 window.userCommentary = '';
 window.userMoaInput = null;          // 'GoF' | 'LoF' | 'DN'
 window.userMoiOverride = null;
-window.userEsOverrides = {};         // Exon skipping
+window.userEsOverrides = {};         // Exon skipping, single exon
+window.userEsPairOverrides = {};     // Exon skipping, one set per exon pair (by the result's override_key)
 window.userKdOverrides = {};         // Knockdown
 window.userWtOverrides = {};         // WT upregulation
 window.userSsOverrides = {};         // Splice correction
@@ -719,6 +721,7 @@ function resetUserInputs() {
     window.userMoiOverride = null;
     window.userCommentary = '';
     window.userEsOverrides = {};
+    window.userEsPairOverrides = {};
     window.userKdOverrides = {};
     window.userWtOverrides = {};
     window.userSsOverrides = {};
@@ -733,6 +736,7 @@ function saveSession(data) {
         sessionStorage.setItem('avec_moa', window.userMoaInput || '');
         sessionStorage.setItem('avec_commentary', window.userCommentary || '');
         sessionStorage.setItem('avec_es_overrides', JSON.stringify(window.userEsOverrides || {}));
+        sessionStorage.setItem('avec_es_pair_overrides', JSON.stringify(window.userEsPairOverrides || {}));
         sessionStorage.setItem('avec_kd_overrides', JSON.stringify(window.userKdOverrides || {}));
         sessionStorage.setItem('avec_wt_overrides', JSON.stringify(window.userWtOverrides || {}));
         sessionStorage.setItem('avec_moi_override', JSON.stringify(window.userMoiOverride));
@@ -753,6 +757,7 @@ window.addEventListener('DOMContentLoaded', () => {
         window.userMoaInput = sessionStorage.getItem('avec_moa') || null;
         window.userCommentary = sessionStorage.getItem('avec_commentary') || '';
         window.userEsOverrides = json('avec_es_overrides') || {};
+        window.userEsPairOverrides = json('avec_es_pair_overrides') || {};
         window.userKdOverrides = json('avec_kd_overrides') || {};
         window.userWtOverrides = json('avec_wt_overrides') || {};
         window.userMoiOverride = json('avec_moi_override');
@@ -887,6 +892,7 @@ async function reassess(lead, from) {
         splice_user_input: window.userSpliceInput,
         exonic_pathogenic_user_input: window.userExonicPathogenic,
         exon_skipping_overrides: window.userEsOverrides,
+        exon_pair_overrides: window.userEsPairOverrides,
         knockdown_overrides: window.userKdOverrides,
         wt_upregulation_overrides: window.userWtOverrides,
         splice_switching_overrides: window.userSsOverrides,
@@ -1049,16 +1055,17 @@ document.getElementById('results').addEventListener('click', function (e) {
             break;
         case 'commit-overrides': {
             const strategy = btn.dataset.strategy;
+            const pairKey = btn.dataset.overrideKey;
             const form = document.getElementById(`override-form-${btn.dataset.formId}`);
             if (!form) return;
-            // Keep the strategy's existing overrides (e.g. those committed on another exon-skipping
-            // option) and record only checks whose state now differs from the automatic result
-            const existing = {
+            // Each exon pair keeps its own overrides, so applying them here leaves the other exon-skipping
+            // options alone. Record only checks whose state now differs from the automatic result.
+            const existing = (pairKey ? window.userEsPairOverrides[pairKey] : {
                 Exon_Skipping: window.userEsOverrides,
                 Knockdown: window.userKdOverrides,
                 WT_Upregulation: window.userWtOverrides,
                 Splice_Switching: window.userSsOverrides
-            }[strategy] || {};
+            }[strategy]) || {};
             const overrides = { ...existing };
             form.querySelectorAll('li[data-check-name]').forEach(item => {
                 const checkName = item.dataset.checkName;
@@ -1066,7 +1073,8 @@ document.getElementById('results').addEventListener('click', function (e) {
                 if (String(isPassed) === item.dataset.originalPassed) delete overrides[checkName];
                 else overrides[checkName] = isPassed;
             });
-            if (strategy === 'Exon_Skipping') window.userEsOverrides = overrides;
+            if (pairKey) window.userEsPairOverrides[pairKey] = overrides;
+            else if (strategy === 'Exon_Skipping') window.userEsOverrides = overrides;
             if (strategy === 'Knockdown') window.userKdOverrides = overrides;
             if (strategy === 'WT_Upregulation') window.userWtOverrides = overrides;
             if (strategy === 'Splice_Switching') window.userSsOverrides = overrides;
@@ -1088,6 +1096,11 @@ document.getElementById('results').addEventListener('click', function (e) {
             downloadReport();
             confirmOnButton(btn, 'Report downloaded');
             break;
+        case 'download-asos': {
+            const saved = downloadHawkeyeAsos(Number(btn.dataset.resultIndex));
+            confirmOnButton(btn, saved ? 'ASOs downloaded' : 'No ASOs to download');
+            break;
+        }
         case 'copy-query':
             if (navigator.clipboard) {
                 navigator.clipboard.writeText(window.assessedQuery || '')
@@ -1643,12 +1656,12 @@ function displayResults(data, opts = {}) {
                             body += `<li class="${status.passed ? 'pass' : 'fail'}" style="--i:${i}" role="checkbox" tabindex="0" aria-checked="${!!status.passed}" data-check-name="${esc(check)}" data-original-passed="${status.original_passed}" data-shown-passed="${!!status.passed}"><span>${isChanged ? `<strong>${text}</strong>` : text}</span></li>`;
                         });
                         body += '</ul></div>';
-                        body += `<div id="override-controls-${uniqueId}" class="override-controls" hidden><button type="button" class="commit-overrides-btn" data-action="commit-overrides" data-strategy="${strategy}" data-form-id="${uniqueId}">Apply overrides and reassess</button><span class="override-count"></span></div>`;
+                        body += `<div id="override-controls-${uniqueId}" class="override-controls" hidden><button type="button" class="commit-overrides-btn" data-action="commit-overrides" data-strategy="${strategy}" data-form-id="${uniqueId}"${resItem.override_key ? ` data-override-key="${esc(resItem.override_key)}"` : ''}>Apply overrides and reassess</button><span class="override-count"></span></div>`;
                     }
 
                     if (resItem.pathogenic_variant_counts) {
                         body += resItem.clinvar_url
-                            ? `<h5><a href="${esc(resItem.clinvar_url)}" target="_blank" rel="noopener noreferrer">Evidence from databases (ClinVar)</a></h5>`
+                            ? `<h5><a href="${esc(resItem.clinvar_url)}" target="_blank" rel="noopener noreferrer">Evidence from databases</a></h5>`
                             : '<h5>Evidence from databases</h5>';
 
                         let domainHTML = esc(resItem.domain_count || 'N/A');
@@ -1695,8 +1708,36 @@ function displayResults(data, opts = {}) {
                             }).join(', ');
                             return `<div class="variant-links">${items}</div>`;
                         };
+                        // HAWK-EYE's own dispensability verdict for this exon, with the Y/N
+                        // criteria behind it (its `explanation`, a semicolon-separated list).
+                        let hawkeyeEvidenceHTML = '';
+                        if (strategy === 'Exon_Skipping' && resItem.hawkeye) {
+                            const hk = resItem.hawkeye;
+                            let hkValue;
+                            if (hk.unavailable) {
+                                hkValue = 'HAWK-EYE could not be reached';
+                            } else if (!hk.found) {
+                                hkValue = 'Not listed for this exon';
+                            } else {
+                                const where = [
+                                    hk.exon == null ? '' : `exon ${hk.exon}${hk.exon_count ? ' / ' + hk.exon_count : ''}`,
+                                    hk.transcript_id || '',
+                                ].filter(Boolean).join(', ');
+                                hkValue = esc(hk.assessment || 'Not stated');
+                                if (where) hkValue += ` <span class="note">(${esc(where)})</span>`;
+                                if (!hk.exon_number_matches) {
+                                    hkValue += '<div class="note">Matched by genomic coordinates: HAWK-EYE numbers exons along the MANE Select transcript, which gives this exon a different number.</div>';
+                                }
+                                const criteria = String(hk.explanation || '').split(';').map(s => s.trim()).filter(Boolean);
+                                if (criteria.length > 0) {
+                                    hkValue += `<ul class="domain-list">${criteria.map(c => `<li>${esc(c)}</li>`).join('')}</ul>`;
+                                }
+                            }
+                            hawkeyeEvidenceHTML = `<li><strong>Exon dispensability (HAWK-EYE):</strong> ${hkValue}</li>`;
+                        }
                         const counts = resItem.pathogenic_variant_counts;
                         body += `<ul>
+                            ${hawkeyeEvidenceHTML}
                             <li><strong>Fraction of protein:</strong> ${esc(resItem.frac_cds || 'N/A')}</li>
                             <li><strong>Overlapping protein domains:</strong> ${domainHTML}</li>
                             <li><strong>Tandem repeat domains (TReXome DB):</strong> ${trexomeGeneHTML}${trexomeHTML}</li>
@@ -1711,7 +1752,39 @@ function displayResults(data, opts = {}) {
                         </ul>`;
                     }
 
+                    // HAWK-EYE: a link to its assessment of this gene, and the ASO candidates it
+                    // designed for this exon as a CSV download. Only the single-exon result
+                    // carries a `hawkeye` record, so exon pairs get neither.
+                    if (strategy === 'Exon_Skipping' && resItem.hawkeye && resItem.hawkeye.url) {
+                        const hk = resItem.hawkeye;
+                        const hasAsos = Array.isArray(hk.asos) && hk.asos.length > 0;
+                        let actions = `<a class="btn btn--quiet" href="${esc(hk.url)}" target="_blank" rel="noopener noreferrer">View on HAWK-EYE</a>`;
+                        if (hasAsos) {
+                            actions += `<button type="button" class="btn btn--primary" data-action="download-asos" data-result-index="${idx}">Download ASOs (CSV, ${esc(hk.aso_count)})</button>`;
+                        }
+                        let asoNote = '';
+                        if (hk.asos_unavailable) asoNote = 'HAWK-EYE could not be reached for its ASO candidates.';
+                        else if (hk.unavailable) asoNote = 'HAWK-EYE could not be reached.';
+                        else if (hk.found && !hasAsos) asoNote = 'HAWK-EYE designed no ASO candidates for this exon.';
+                        else if (hasAsos && hk.asos_truncated) asoNote = `The download holds the first ${hk.asos.length} of ${hk.aso_count} candidates.`;
+                        body += `<div class="report-actions">${actions}${asoNote ? `<span class="note">${esc(asoNote)}</span>` : ''}</div>`;
+                    }
+
                     if (strategy === 'Knockdown') {
+                        // HAWK-EYE's allele-specific knockdown targets for this gene: how many
+                        // heterozygous SNPs can be targeted, and how many ASOs it holds for them.
+                        const hkKd = resItem.hawkeye_knockdown;
+                        if (hkKd && hkKd.url) {
+                            if (hkKd.found) {
+                                const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+                                const counts = `${plural(hkKd.snp_count, 'targetable SNP')} · ${plural(hkKd.aso_count, 'ASO sequence')}`;
+                                body += `<div class="report-actions"><a class="btn btn--quiet" href="${esc(hkKd.url)}" target="_blank" rel="noopener noreferrer">View knockdown on HAWK-EYE</a><span class="note">${esc(counts)}</span></div>`;
+                            } else {
+                                body += `<p class="note">${esc(hkKd.unavailable
+                                    ? 'HAWK-EYE could not be reached for its knockdown targets.'
+                                    : 'HAWK-EYE lists no allele-specific knockdown targets for this gene.')}</p>`;
+                            }
+                        }
                         const gene = (data.summary && data.summary.gene) ? data.summary.gene : '';
                         const origQ = window.assessedQuery || '';
                         const cdnaMatch = origQ.match(/c\.[^\s\)\]]+/i);
@@ -1743,6 +1816,13 @@ function displayResults(data, opts = {}) {
         </section>`;
     }
 
+    // ---------- Software and data versions ----------
+    // Kept out of the report's assessment blocks (report: false); downloadReport adds its own copy
+    const provenanceBody = provenanceHTML(data.provenance);
+    const provenanceAccordion = provenanceBody ? accordion({
+        id: 'provenance', title: 'Software and data versions', report: false, body: provenanceBody,
+    }) : '';
+
     // ---------- Commentary & report ----------
     const reportHTML = accordion({
         id: 'report', title: 'Commentary and report', report: false,
@@ -1761,7 +1841,7 @@ function displayResults(data, opts = {}) {
     resultsDiv.innerHTML = `<h2 class="results-title">Results</h2>
         <p class="results-query"><span>${esc(window.assessedQuery || '')}</span>
             <button type="button" class="copy-btn" data-action="copy-query">${COPY_ICON}<span>Copy</span></button></p>
-        ${overviewHTML}${summaryHTML}${igvHTML}${literatureHTML}${assessmentsHTML}${reportHTML}`;
+        ${overviewHTML}${summaryHTML}${igvHTML}${literatureHTML}${assessmentsHTML}${provenanceAccordion}${reportHTML}`;
 
     // Restore commentary from session/global state and keep it current
     const commentaryTextarea = document.getElementById('user-commentary');
@@ -1815,12 +1895,131 @@ function displayResults(data, opts = {}) {
 }
 
 // ======================================================================
+// Software and data versions (the result's "provenance" block)
+// ======================================================================
+const PROVENANCE_STATUS = {
+    'used': 'Used', 'unavailable': 'Unavailable', 'not queried': 'Not needed',
+    'as needed': 'As needed', 'link': 'Link only',
+};
+
+// '2026-11-08T14:05:09+01:00' -> '2026-11-08 14:05:09 UTC+01:00'
+function provenanceTime(iso) {
+    const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})(Z|[+-]\d{2}:\d{2})?$/.exec(String(iso || ''));
+    if (!m) return String(iso || '');
+    return `${m[1]} ${m[2]}${m[3] ? ` UTC${m[3] === 'Z' ? '' : m[3]}` : ''}`;
+}
+
+// The same as HTML, each part kept whole so a narrow column breaks only between them
+function provenanceTimeHTML(iso) {
+    return provenanceTime(iso).split(' ').map(part => `<span class="prov-nowrap">${esc(part)}</span>`).join(' ');
+}
+
+// 'AVEC 1.0.0 (2026-11-08)'
+function provenanceSoftware(prov) {
+    const sw = (prov && prov.software) || {};
+    return `${sw.name || 'AVEC'} ${sw.version || ''}${sw.release_date ? ` (${sw.release_date})` : ''}`.replace(/\s+/g, ' ').trim();
+}
+
+// The software facts and one table row per data source; empty when the backend sent no provenance
+function provenanceHTML(prov) {
+    if (!prov || !Array.isArray(prov.sources)) return '';
+    const sw = prov.software || {};
+    const settings = sw.settings || {};
+    const muted = text => `<span class="prov-muted">${esc(text)}</span>`;
+    const sub = html => html ? `<span class="prov-sub">${html}</span>` : '';
+
+    const rows = prov.sources.map(s => {
+        const name = s.url ? `<a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${esc(s.name)}</a>` : esc(s.name);
+        const fileFacts = [
+            s.file ? `<code>${esc(s.file)}</code>` : '',
+            s.sha256 ? `SHA-256 <code>${esc(s.sha256)}</code>` : '',
+            s.rows != null ? `${esc(Number(s.rows).toLocaleString('en'))} rows` : '',
+        ].filter(Boolean).join(' · ');
+        const version = (s.version ? esc(s.version)
+            : s.status === 'link' ? muted('–')
+            : muted(s.publishes_version ? 'Unknown (lookup failed)' : 'None published')) + sub(fileFacts);
+        // Live sources are read during the assessment (its time is in the facts above); only
+        // the N1C snapshot, fetched earlier, gets a time of its own
+        const when = s.kind === 'bundled' ? 'Bundled with AVEC'
+            : s.loaded_at ? `Fetched ${provenanceTimeHTML(s.loaded_at)}`
+            : s.accessed_at && s.accessed_at === prov.assessed_at ? 'During this assessment'
+            : s.accessed_at ? provenanceTimeHTML(s.accessed_at)
+            : muted('–');
+        const statusKey = String(s.status || '').replace(/\s+/g, '-');
+        const status = `<span class="prov-status prov-status--${esc(statusKey)}">${esc(PROVENANCE_STATUS[s.status] || s.status || '')}</span>` + sub(esc(s.note || ''));
+        return `<tr><th scope="row">${name}${sub(esc(s.provides || ''))}</th><td data-label="Version / release">${version}</td><td data-label="Accessed">${when}</td><td data-label="Status">${status}</td></tr>`;
+    }).join('');
+
+    const facts = [
+        ['Software', provenanceSoftware(prov)],
+        ['Guidelines', sw.guidelines],
+        ['Genome assembly', sw.genome_assembly],
+        ['Assessed', provenanceTime(prov.assessed_at)],
+    ].filter(([, value]) => value).map(([label, value]) => `<li><strong>${esc(label)}</strong> ${esc(value)}</li>`).join('');
+
+    const settingsNote = [
+        settings.min_clinvar_review_stars != null ? `ClinVar variants in the exon count from ${settings.min_clinvar_review_stars} review stars upward.` : '',
+        settings.splice_flank_bp != null ? `Exon variant windows include ${settings.splice_flank_bp} intronic bases on each side (canonical splice sites).` : '',
+        prov.cache_note || '',
+    ].filter(Boolean).join(' ');
+
+    return `<ul class="prov-facts">${facts}</ul>
+        <div class="prov-scroll"><table class="prov-table">
+            <thead><tr><th scope="col">Source</th><th scope="col">Version / release</th><th scope="col">Accessed</th><th scope="col">Status</th></tr></thead>
+            <tbody>${rows}</tbody>
+        </table></div>
+        ${settingsNote ? `<p class="note">${esc(settingsNote)}</p>` : ''}`;
+}
+
+// ======================================================================
 // Downloadable HTML report
 // ======================================================================
+// Saves HAWK-EYE's ASO candidates for one exon as a CSV, in the same two-block layout HAWK-EYE's
+// own export uses: a header and one row of exon metadata, a blank line, then a header and one row
+// per candidate. Returns false when there is nothing to save, so the caller can say so.
+function downloadHawkeyeAsos(index) {
+    const results = ((window.lastAssessData || {}).assessments || {}).Exon_Skipping;
+    const resItem = Array.isArray(results) ? results[index] : results;
+    const hk = resItem && resItem.hawkeye;
+    if (!hk || !Array.isArray(hk.asos) || hk.asos.length === 0) return false;
+
+    // Everything is quoted, as in HAWK-EYE's export; embedded quotes double per RFC 4180.
+    const cell = v => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
+    const metaCols = ['transcript_id', 'gene', 'chromosome', 'exon', 'exon_start', 'exon_end',
+                      'exon_length', 'cds_contribution', 'assessment', 'aso_candidates'];
+    const asoCols = ['aso_sequence', 'idt_format_aso', 'acute_neurotoxicity_score'];
+    const meta = { ...hk, aso_candidates: hk.aso_count };
+    const lines = [
+        metaCols.join(','),
+        metaCols.map(c => cell(meta[c])).join(','),
+        '',
+        asoCols.join(','),
+        ...hk.asos.map(aso => asoCols.map(c => cell(aso[c])).join(',')),
+    ];
+
+    const pad = n => String(n).padStart(2, '0');
+    const now = new Date();
+    const localStamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+    const gene = String(hk.gene || (window.lastAssessData.summary || {}).gene || 'gene').replace(/[^A-Za-z0-9]/g, '');
+    const exon = hk.exon == null ? '' : hk.exon;
+
+    // CRLF and a trailing newline so Excel reads the two blocks as written
+    const blob = new Blob([lines.join('\r\n') + '\r\n'], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${gene}_exon${exon}_ASO_${hk.retrieved_at_stamp || localStamp}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+    return true;
+}
+
 function downloadReport() {
     const query = window.assessedQuery || queryInput.value;
     const commentary = document.getElementById('user-commentary').value;
     const timestamp = new Date().toLocaleString();
+    const prov = (window.lastAssessData || {}).provenance;
 
     let reportHTML = `<!doctype html>
 <html lang="en">
@@ -1856,13 +2055,27 @@ function downloadReport() {
         /* Warnings */
         .warning { color: #c4423b; font-weight: bold; }
         .note { font-style: italic; color: #555; font-size: 0.9em; }
+        /* Software and data sources */
+        .prov-facts { list-style: none; padding: 0; margin: 0 0 1em; }
+        .prov-facts li { margin-bottom: 0.3em; }
+        .prov-facts li > strong:first-child::after { content: ':'; }
+        .prov-table { width: 100%; border-collapse: collapse; font-size: 0.9em; line-height: 1.4; }
+        .prov-table th, .prov-table td { text-align: left; vertical-align: top; padding: 0.45em 0.6em 0.45em 0; border-bottom: 1px solid #c2c2c2; }
+        .prov-table thead th { border-bottom: 2px solid #000; font-size: 0.85em; text-transform: uppercase; }
+        .prov-table tbody th { font-weight: 600; }
+        .prov-sub { display: block; font-weight: normal; color: #555; font-size: 0.9em; }
+        .prov-muted { color: #777; }
+        .prov-status { font-weight: 600; }
+        .prov-status--unavailable { color: #c4423b; }
+        .prov-scroll { overflow-x: auto; }
+        .prov-nowrap { white-space: nowrap; }
     </style>
 </head>
 <body>
     <h1>AVEC Assessment Report</h1>
     <p><strong>Query:</strong> ${esc(query)}</p>
     <p><strong>Report Generated:</strong> ${esc(timestamp)}</p>
-`;
+${prov ? `    <p><strong>Software:</strong> ${esc(provenanceSoftware(prov))}${prov.software && prov.software.guidelines ? ` · ${esc(prov.software.guidelines)}` : ''}</p>\n` : ''}`;
 
     if (commentary) {
         reportHTML += `<div class="summary-block commentary"><h2>User Commentary</h2><pre>${esc(commentary)}</pre></div>`;
@@ -1908,6 +2121,12 @@ function downloadReport() {
         clone.querySelectorAll('button').forEach(b => b.replaceWith(document.createTextNode(b.textContent)));
         reportHTML += `<div class="assessment-block"><h3>${esc(headerText)}</h3>${clone.innerHTML}</div>`;
     });
+
+    // Software version and the release of every data source behind this result
+    const provenanceSection = provenanceHTML(prov);
+    if (provenanceSection) {
+        reportHTML += `<h2>Software and Data Sources</h2><div class="assessment-block">${provenanceSection}</div>`;
+    }
 
     reportHTML += `<p class="disclaimer">This tool is for informational purposes only and is not for clinical use. Results require manual verification.</p></body></html>`;
 
