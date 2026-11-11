@@ -21,8 +21,8 @@ from urllib.parse import urlencode, urljoin, quote
 # ===== CONFIGURATION =====
 # AVEC's own version, stated in every report and API response (see _build_provenance). Raise the
 # version and the date together whenever a changed avec_ukk.py or docs/ goes live.
-AVEC_VERSION = "1.0.0"
-AVEC_RELEASE_DATE = "2026-11-08"
+AVEC_VERSION = "1.1.0"
+AVEC_RELEASE_DATE = "2026-11-11"
 GUIDELINES_VERSION = "N1C VARIANT Guidelines 2.0 (July 2026)"
 
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -2435,6 +2435,29 @@ def assess_wt_upregulation(client: EnsemblClient, gene_id: str, gene_symbol: str
             "checks": {}
         }
 
+# Splice-correction results for the user's answer to "is a splice-altering effect validated?" when the
+# variant is in neither SpliceVarDB nor SSCVDB. 'yes' continues with the position assessment instead.
+USER_SPLICE_ANSWERS: Dict[str, Dict[str, str]] = {
+    'no': {"classification": "Not Eligible", "reason": "User confirmed that this variant has no splicing effect."},
+    'unknown': {"classification": "Unable to Assess", "reason": "User confirmed that no splicing data are available for this variant."},
+}
+
+def assess_splice_correction(splice_user_input: Optional[str], variant_hgvs: str, vep_data: Dict[str, Any], gene_symbol: str, exonic_pathogenic_user_input: Optional[str] = None, overrides: Optional[Dict[str, bool]] = None, target_consequence: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+    """
+    Splice correction, given the user's answer to the validation prompt (asked when the variant is in
+    neither database): 'yes' continues with the position assessment, 'no' is Not Eligible, 'unknown' is
+    Unable to Assess. Without an answer, SpliceVarDB and SSCVDB are checked.
+    """
+    overrides = overrides or {}
+    if splice_user_input == 'yes':
+        details = {"Confirmation Method": "User-provided validation (qPCR/RNA-seq/cDNA)"}
+        return _with_aso_exists_check(_evaluate_splice_variant_position(variant_hgvs, vep_data, details, exonic_pathogenic_user_input=exonic_pathogenic_user_input, overrides=overrides, target_consequence=target_consequence), overrides)
+    # An ASO the user says already exists makes the variant eligible whatever the splice data say;
+    # assess_splice_switching returns that result before looking anything up
+    if splice_user_input in USER_SPLICE_ANSWERS and not overrides.get('ASO already exists', False):
+        return _with_aso_exists_check(dict(USER_SPLICE_ANSWERS[splice_user_input]), overrides)
+    return assess_splice_switching(variant_hgvs, vep_data, gene_symbol, exonic_pathogenic_user_input=exonic_pathogenic_user_input, overrides=overrides, target_consequence=target_consequence)
+
 def _with_aso_exists_check(result: Optional[Dict[str, Any]], overrides: Dict[str, bool]) -> Optional[Dict[str, Any]]:
     """Adds the user-overridable 'ASO already exists' check to a splice-correction result that lacks one."""
     if result is not None:
@@ -3322,15 +3345,7 @@ def _assess_for_transcript(
     variant_identifier_from_vep = vep_entry.get('input')
     if variant_identifier_from_vep:
         _progress('splice', "Checking SpliceVarDB and SSCVDB for experimentally validated splicing effects")
-        splice_assessment = None
-        if splice_user_input == 'yes':
-            details = {"Confirmation Method": "User-provided validation (qPCR/RNA-seq/cDNA)"}
-            splice_assessment = _with_aso_exists_check(_evaluate_splice_variant_position(variant_identifier_from_vep, vep_entry, details, exonic_pathogenic_user_input=exonic_pathogenic_user_input, overrides=splice_switching_overrides, target_consequence=target_consequence), splice_switching_overrides)
-        elif splice_user_input == 'no':
-            splice_assessment = {"classification": "Unable to Assess", "reason": "User confirmed no known splice-altering effect."}
-        else:
-            splice_assessment = assess_splice_switching(variant_identifier_from_vep, vep_entry, gene_symbol, exonic_pathogenic_user_input=exonic_pathogenic_user_input, overrides=splice_switching_overrides, target_consequence=target_consequence)
-
+        splice_assessment = assess_splice_correction(splice_user_input, variant_identifier_from_vep, vep_entry, gene_symbol, exonic_pathogenic_user_input=exonic_pathogenic_user_input, overrides=splice_switching_overrides, target_consequence=target_consequence)
         if splice_assessment:
             final_result["assessments"]["Splice_Switching"] = splice_assessment
 

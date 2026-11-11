@@ -803,7 +803,7 @@
     <p>To accelerate literature search, AVEC automatically searches for existing ASO therapies, pathomechanism, and splicing effects on PubMed.</p>
 
     <h3>Splice correction</h3>
-    <p>For splice correction, the variant is compared to SpliceVarDB, and SSCVDB - both are databases of splice-altering variants. Only RNA-seq and qPCR methods are accepted as experimental validation of splice altering effects. If no evidence is found, the user can manually input that splice-altering effects have been validated with qPCR or RNA-seq. Otherwise, the variant is categorized as ‘unable to assess’. All variants are assessed based on distance to the canonical splice site.</p>
+    <p>For splice correction, the variant is compared to SpliceVarDB, and SSCVDB - both are databases of splice-altering variants. Only RNA-seq and qPCR methods are accepted as experimental validation of splice altering effects. If no evidence is found, the user is asked whether such validation exists. If qPCR or RNA-seq shows a splice-altering effect, the assessment continues. If there is evidence for no splicing effect, the variant is categorized as ‘not eligible’. If no splicing data are available, the variant is categorized as ‘unable to assess’. All variants are assessed based on distance to the canonical splice site.</p>
 
     <h3>Exon skipping</h3>
     <p>Exonic variants are always assessed for exon skipping, initially of a single exon. If the exon harboring the variant is out of frame, the variant is assessed for double-exon skipping using the adjacent (upstream and downstream) exons.</p>

@@ -747,6 +747,7 @@ body.dark .checklist li.pass::before {
 .answer__icon svg { width: 14px; height: 14px; }
 .answer--yes .answer__icon { background: var(--good-tint); color: var(--good-edge); }
 .answer--no .answer__icon { background: var(--bad-tint); color: var(--bad-edge); }
+.answer--unknown .answer__icon { background: var(--neutral-tint); color: var(--neutral-ink); }
 .answer__text { display: flex; flex-direction: column; gap: 2px; padding-top: 3px; }
 .answer__label { font-weight: 700; font-size: .9375rem; line-height: 1.3; }
 .answer__hint { font-size: .8125rem; color: var(--muted); line-height: 1.35; }
@@ -754,6 +755,8 @@ body.dark .checklist li.pass::before {
 .splice-prompt-buttons button.answer--no:hover { border-color: var(--bad-edge); background: color-mix(in srgb, var(--bad-tint) 45%, var(--surface)); }
 .answer--yes:hover .answer__icon { background: var(--good-edge); color: var(--surface); transform: scale(1.08); }
 .answer--no:hover .answer__icon { background: var(--bad-edge); color: var(--surface); transform: scale(1.08); }
+.splice-prompt-buttons button.answer--unknown:hover { border-color: var(--neutral-edge); background: color-mix(in srgb, var(--neutral-tint) 60%, var(--surface)); }
+.answer--unknown:hover .answer__icon { background: var(--neutral-ink); color: var(--surface); transform: scale(1.08); }
 .prompt-context { color: var(--ink-2); margin-bottom: .35em; }
 .choice-buttons button {
     flex: 0 1 150px; display: flex; flex-direction: column; align-items: center; gap: 1px;

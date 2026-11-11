@@ -700,7 +700,8 @@ async function requestAssessment(payload, onProgress) {
 // State, persisted in session storage so a reload restores the page
 // ======================================================================
 window.assessedQuery = '';
-window.userSpliceInput = null;       // 'yes' | 'no' | null
+window.userSpliceInput = null;       // 'yes' | 'no' | 'unknown' | null
+const SPLICE_ANSWER_LABELS = { yes: 'Yes', no: 'No', unknown: 'Unknown' };
 window.userExonicPathogenic = null;  // 'yes' | 'no' | null
 window.userCommentary = '';
 window.userMoaInput = null;          // 'GoF' | 'LoF' | 'DN'
@@ -914,7 +915,7 @@ async function reassess(lead, from) {
     }
     // Tell the user the splice result reflects their answer
     if (window.userSpliceInput && data.assessments && data.assessments.Splice_Switching && !Array.isArray(data.assessments.Splice_Switching)) {
-        const prefix = `<strong>Re-assessed based on user-provided '${window.userSpliceInput === 'yes' ? 'Yes' : 'No'}'.</strong>`;
+        const prefix = `<strong>Re-assessed based on user-provided '${SPLICE_ANSWER_LABELS[window.userSpliceInput] || esc(window.userSpliceInput)}'.</strong>`;
         data.assessments.Splice_Switching.reason = `${prefix} ${data.assessments.Splice_Switching.reason || ''}`;
     }
     appendUserNotes(data);
@@ -1039,7 +1040,7 @@ document.getElementById('results').addEventListener('click', function (e) {
     switch (btn.dataset.action) {
         case 'splice':
             window.userSpliceInput = value;
-            reassess(`Reassessing with your splice answer (${value === 'yes' ? 'Yes' : 'No'}).`, btn);
+            reassess(`Reassessing with your splice answer (${SPLICE_ANSWER_LABELS[value] || value}).`, btn);
             break;
         case 'exonic':
             window.userExonicPathogenic = value;
@@ -1339,6 +1340,7 @@ function accordion({ id, title, suffix = '', status = '', tone = 'neutral', open
 const ANSWER_ICONS = {
     yes: '<svg viewBox="0 0 16 16"><path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     no: '<svg viewBox="0 0 16 16"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+    unknown: '<svg viewBox="0 0 16 16"><path d="M5.5 6a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="8" cy="13.2" r="1.15" fill="currentColor"/></svg>',
 };
 function answerButtons(action, answers) {
     return `<div class="splice-prompt-buttons answer-buttons">${answers.map(a =>
@@ -1597,7 +1599,8 @@ function displayResults(data, opts = {}) {
                         <p class="prompt-question">Is there a known splice-altering effect validated with qPCR or transcriptomics?</p>
                         ${answerButtons('splice', [
                             { value: 'yes', kind: 'yes', label: 'Yes, validated', hint: 'qPCR or RNA-seq shows mis-splicing' },
-                            { value: 'no', kind: 'no', label: 'No', hint: 'No validated splice-altering effect is known' },
+                            { value: 'no', kind: 'no', label: 'No splicing effect', hint: 'qPCR or RNA-seq shows no splicing effect' },
+                            { value: 'unknown', kind: 'unknown', label: 'Unknown', hint: 'No splicing data are available' },
                         ])}`,
                 });
                 overview.push({ target: `toggle-${strategy}`, name, status: 'Your input needed', tone: 'input' });
