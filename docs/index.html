@@ -1269,9 +1269,10 @@ async function loadPubmed(container) {
 const SKELETON = label => `<div class="skeleton" role="status"><span class="visually-hidden">${esc(label)}</span>` +
     [92, 56, 86, 44, 90, 62].map(w => `<span class="skeleton-line" style="width:${w}%"></span>`).join('') + '</div>';
 
+// An empty queryLabel leaves the query line out, for callers that show the query themselves
 function pubmedBody(query, resultsId, queryLabel = 'Query') {
     const pmUrl = 'https://pubmed.ncbi.nlm.nih.gov/?term=' + encodeURIComponent(query);
-    return `<p class="pubmed-query"><strong>${esc(queryLabel)}:</strong> <code>${esc(query)}</code></p>
+    return `${queryLabel ? `<p class="pubmed-query"><strong>${esc(queryLabel)}:</strong> <code>${esc(query)}</code></p>` : ''}
             <div id="${resultsId}" class="pubmed-context" data-query="${esc(query)}">${SKELETON('Loading PubMed results…')}</div>
             <p class="pubmed-footer"><a href="${pmUrl}" target="_blank" rel="noopener noreferrer">Open all results on PubMed</a></p>
             <p class="note">Searched with NCBI E-utilities.</p>`;
@@ -1788,21 +1789,15 @@ function displayResults(data, opts = {}) {
                                     : 'HAWK-EYE lists no allele-specific knockdown targets for this gene.')}</p>`;
                             }
                         }
+                        // Knockdown literature for the gene (not the variant): the query is shown in the
+                        // block itself, the result list in the collapsed sub-row below it
                         const gene = (data.summary && data.summary.gene) ? data.summary.gene : '';
-                        const origQ = window.assessedQuery || '';
-                        const cdnaMatch = origQ.match(/c\.[^\s\)\]]+/i);
-                        const cdna = cdnaMatch ? cdnaMatch[0] : '';
-                        const refseqMatch = origQ.match(/(NM_[0-9]+\.?[0-9]*)/i);
-                        const refseq = refseqMatch ? refseqMatch[1] : '';
-                        const parts = [];
-                        if (gene && cdna) parts.push(`(${gene} AND ${cdna})`);
-                        if (refseq) parts.push(refseq);
-                        const prefix = parts.length ? `(${parts.join(' OR ')})` : '';
-                        const terms = '((antisense OR ASO) AND (knockdown OR "gene silencing" OR "allele specific" OR "allele-specific"))';
-                        const kdQuery = prefix ? `${prefix} AND ${terms}` : terms;
+                        const terms = '((ASO OR AON OR "Antisense oligonucleotide") AND (knockdown OR "gene silencing" OR "allele specific" OR "allele-specific"))';
+                        const kdQuery = gene ? `(${gene}) AND ${terms}` : terms;
+                        body += `<p class="pubmed-query"><strong>PubMed query:</strong> <code>${esc(kdQuery)}</code></p>`;
                         body += accordion({
                             id: `${strategy}-pubmed`, title: 'Knockdown literature (PubMed)', level: 'h5', report: false, extraClass: 'pubmed-accordion',
-                            body: pubmedBody(kdQuery, `pubmed-${strategy}-results`, 'Related PubMed search'),
+                            body: pubmedBody(kdQuery, `pubmed-${strategy}-results`, ''),
                         });
                     }
 
