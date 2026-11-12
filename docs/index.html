@@ -1792,7 +1792,8 @@ function displayResults(data, opts = {}) {
                         // Knockdown literature for the gene (not the variant): the query is shown in the
                         // block itself, the result list in the collapsed sub-row below it
                         const gene = (data.summary && data.summary.gene) ? data.summary.gene : '';
-                        const terms = '((ASO OR AON OR "Antisense oligonucleotide") AND (knockdown OR "gene silencing" OR "allele specific" OR "allele-specific"))';
+                        // Any knockdown approach (ASO, siRNA, ...), not only ASOs
+                        const terms = '(knockdown OR "gene silencing" OR "allele specific" OR "allele-specific")';
                         const kdQuery = gene ? `(${gene}) AND ${terms}` : terms;
                         body += `<p class="pubmed-query"><strong>PubMed query:</strong> <code>${esc(kdQuery)}</code></p>`;
                         body += accordion({
